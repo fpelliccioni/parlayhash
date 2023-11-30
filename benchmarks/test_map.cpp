@@ -13,6 +13,7 @@ using V = unsigned long;
 using namespace parlay;
 
 #include "unordered_map.h"
+#include <boost/unordered/concurrent_flat_map.hpp>
 
 // leave undefined if measuring througput since measuring latency will slow down throughput
 //#define Latency 1
@@ -32,7 +33,8 @@ struct IntHash {
   }
 };
 
-using map_type = unordered_map<K,V,IntHash>;
+// using map_type = unordered_map<K,V,IntHash>;
+using map_type = boost::concurrent_flat_map<K, V, IntHash>;
 
 double geometric_mean(const parlay::sequence<double>& vals) {
   double product = 1;
@@ -106,7 +108,9 @@ test_loop(commandLine& C,
 	map.insert(HANDLE a[j], 123); }, 1, true);
 #else
     parlay::parallel_for(0, n, [&] (size_t i) {
-	map.insert(a[i], 123); });
+	    // map.insert(a[i], 123);
+      map.emplace(a[i], 123);
+    });
 #endif
     if (map.size() != n)
       std::cout << "bad initial size = " << map.size() << std::endl;
@@ -177,20 +181,24 @@ test_loop(commandLine& C,
 	  if (duration.count() * 1000000 < latency_cutoff)
 	    latency_count++;
 #else
-	  query_success_count += map.find(HANDLE b[j]).has_value();
+	  // query_success_count += map.find(HANDLE b[j]).has_value();
+    map.cvisit(HANDLE b[j], [&query_success_count](auto&& x) { ++query_success_count; });
 #endif
 	} else if (op_types[k] == Insert) {
 #ifdef UPSERT
 	  if (upsert) {
 	    if (map.upsert(HANDLE b[j], [] (std::optional<V> v) {return 123;})) {added++; update_success_count++;}
 	  } else {
-	    if (map.insert(HANDLE b[j], 123)) {added++; update_success_count++;}
+	    // if (map.insert(HANDLE b[j], 123)) {added++; update_success_count++;}
+      if (map.emplace(HANDLE b[j], 123)) {added++; update_success_count++;}
 	  }
 #else
-	  if (map.insert(HANDLE b[j], 123)) {added++; update_success_count++;}
+	  // if (map.insert(HANDLE b[j], 123)) {added++; update_success_count++;}
+	  if (map.emplace(HANDLE b[j], 123)) {added++; update_success_count++;}
 #endif
 	} else { // (op_types[k] == Remove)
-	  if (map.remove(HANDLE b[j])) {removed++; update_success_count++;}
+	  // if (map.remove(HANDLE b[j])) {removed++; update_success_count++;}
+    if (map.erase(HANDLE b[j])) {removed++; update_success_count++;}
 	}
 
 

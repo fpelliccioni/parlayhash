@@ -9,11 +9,11 @@ struct unordered_map {
 
   Table table;
 
-  std::optional<V> find(const K& k) {
-    std::optional<V> result;
-    table.visit(k, [&](auto&& x) { result = x.second; });
-    return result;
-  }
+  // std::optional<V> find(const K& k) {
+  //   std::optional<V> result;
+  //   table.cvisit(k, [&](auto&& x) { result = x.second; });
+  //   return result;
+  // }
 
   bool insert(const K& k, const V& v) {
     return table.emplace(k, v);

@@ -16,7 +16,7 @@ add_benchmark(hash_list include "" "" "UPSERT")
 add_benchmark(std_hash other "" "" "")
 add_benchmark(std_sharded other "" "" "")
 add_benchmark(libcuckoo other "" "" "")
-add_benchmark(growt other "" "-mcx16" "")
+# add_benchmark(growt other "" "-mcx16" "")
 add_benchmark(parallel_hashmap other "" "" "")
 
 find_package(GTest)
@@ -38,8 +38,8 @@ IF (TBB_FOUND)
   add_benchmark(tbb_hash other TBB::tbb "" "")
 endif()
 
-# set(BOOST_DIR ${PARLAYHASH_SOURCE_DIR}/build/benchmarks/boost_1_83_0)
-
+set(BOOST_DIR ${PARLAYHASH_SOURCE_DIR}/benchmarks/boost_1_83_0)
+message (STATUS "********** Boost dir: ${BOOST_DIR}")
 # We have to manually specify Boost's location since we are using the latest
 # cutting-edge Boost version, and FindBoost.cmake can not find Boost.Unordered
 if (BOOST_DIR)

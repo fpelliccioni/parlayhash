@@ -1,3 +1,7 @@
+// A simple sharded version of the folly::F14ValueMap (sequential) hash table.
+// Just randomly partitions keys into 2^log_num_shards shards with a lock on each
+// using the hash function to choose the shard.
+
 #pragma once
 
 #include <mutex>
@@ -13,6 +17,8 @@ template <typename K,
 	  typename ReadGuard = std::unique_lock<Mutex>,
 	  typename WriteGuard = std::unique_lock<Mutex>>
 struct unordered_map {
+
+  static constexpr int log_num_shards = 14;
 
   using umap = folly::F14ValueMap<K, V, Hash, KeyEqual>;
   struct alignas(64) entry {
@@ -35,10 +41,6 @@ struct unordered_map {
     else return std::optional<V>();
   }
 
-  std::optional<V> find_(const K& k) {
-    return find(k);
-  }
-
   bool insert(const K& k, const V& v) {
     size_t idx = hash_to_shard(k);
     WriteGuard g_{table[idx].m};
@@ -55,7 +57,7 @@ struct unordered_map {
 
   unordered_map(size_t n) {
     int n_bits = std::round(std::log2(n));
-    int bits = n_bits - 2;
+    int bits = log_num_shards;
     num_buckets = 1l << bits; // must be a power of 2
 
     table = std::vector<entry>(num_buckets);

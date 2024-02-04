@@ -1,0 +1,44 @@
+./folly_sharded,0%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=143,insert_mops=99,mops=188
+./folly_sharded,0%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=140,insert_mops=76,mops=189
+./folly_sharded,0%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=104,mops=105
+./folly_sharded,0%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=97,mops=101
+
+./folly_sharded,10%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=145,insert_mops=76,mops=177
+./folly_sharded,10%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=139,insert_mops=100,mops=177
+./folly_sharded,10%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=99,mops=97
+./folly_sharded,10%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=102,mops=98
+
+./folly_sharded,50%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=140,insert_mops=88,mops=153
+./folly_sharded,50%update,n=10000,p=16,long_long,z=0,grow=0,mem_pe=141,insert_mops=85,mops=153
+./folly_sharded,50%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=99,mops=87
+./folly_sharded,50%update,n=10000000,p=16,long_long,z=0,grow=0,mem_pe=27,insert_mops=100,mops=87
+
+./folly_sharded,0%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=145,insert_mops=77,mops=44
+./folly_sharded,0%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=144,insert_mops=88,mops=44
+./folly_sharded,0%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=27,insert_mops=96,mops=79
+./folly_sharded,0%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=26,insert_mops=93,mops=79
+
+./folly_sharded,10%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=140,insert_mops=73,mops=42
+./folly_sharded,10%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=137,insert_mops=81,mops=38
+./folly_sharded,10%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=27,insert_mops=95,mops=68
+./folly_sharded,10%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=26,insert_mops=93,mops=67
+
+./folly_sharded,50%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=141,insert_mops=73,mops=32
+./folly_sharded,50%update,n=10000,p=16,long_long,z=0.99,grow=0,mem_pe=140,insert_mops=72,mops=36
+./folly_sharded,50%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=27,insert_mops=95,mops=52
+./folly_sharded,50%update,n=10000000,p=16,long_long,z=0.99,grow=0,mem_pe=26,insert_mops=94,mops=53
+
+./folly_sharded,10%update,n=10000,p=16,int,z=0,grow=0,mem_pe=114,insert_mops=83,mops=181
+./folly_sharded,10%update,n=10000,p=16,int,z=0,grow=0,mem_pe=83,insert_mops=25,mops=181
+./folly_sharded,10%update,n=10000000,p=16,int,z=0,grow=0,mem_pe=13,insert_mops=110,mops=112
+./folly_sharded,10%update,n=10000000,p=16,int,z=0,grow=0,mem_pe=13,insert_mops=110,mops=111
+
+./folly_sharded,0%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=113,insert_mops=57,mops=82
+./folly_sharded,0%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=113,insert_mops=56,mops=83
+./folly_sharded,10%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=112,insert_mops=56,mops=71
+./folly_sharded,10%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=112,insert_mops=57,mops=70
+./folly_sharded,50%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=112,insert_mops=56,mops=55
+./folly_sharded,50%update,n=1229916,p=16,string_4xlong,trigram,grow=0,mem_pe=112,insert_mops=56,mops=55
+initial insert geometric mean of mops = 71.886
+benchmark geometric mean of mops = 84.2281
+bytes/element geometric mean = 34.5879

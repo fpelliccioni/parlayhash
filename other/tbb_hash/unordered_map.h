@@ -1,6 +1,6 @@
 #define HASH 1
 
-#include "tbb/concurrent_hash_map.h"
+#include <tbb/concurrent_hash_map.h>
 
 template <typename K,
 	  typename V,
@@ -22,10 +22,6 @@ struct unordered_map {
     else return std::optional<V>();
   }
 
-  std::optional<V> find_(const K& k) {
-    return find(k);
-  }
-
   bool insert(const K& k, const V& v) {
     return table.insert(std::make_pair(k, v));    
   }
@@ -34,10 +30,7 @@ struct unordered_map {
     return table.erase(k);
   }
 
-  unordered_map(size_t n) {
-    Table map(n);
-    table = map;
-  }
+  unordered_map(size_t n) : table(Table(n)) {}
 
   long size() {return table.size();}
 };

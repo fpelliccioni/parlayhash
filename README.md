@@ -1,9 +1,8 @@
 # ParlayHash :
-A Header-Only Scalable Concurrent Hash Map.
 
-A growable concurrent hash map supporting **wait-free finds** and mostly **lock-free
-updates** (some locks are taken when growing, but when not growing all updates are lock free).
-It is designed to scale well to  hundreds of threads and work reasonably well under high contention.
+A Header-Only Concurrent Hash Map.  It is growable and is designed to
+scale well to hundreds of threads and work reasonably well under high
+contention.
 
 The simplest way to use the library is to copy the [include](include) directory into your code directory
 and then include the following in your code:
@@ -12,30 +11,96 @@ and then include the following in your code:
 #include "include/parlay_hash/unordered_map.h"
 ```
 
+Here are some comparisons of timings and memory usage to the
+most widely used open-source concurrent hash tables.  These numbers are
+averages (geometric means) over a variety of work loads.  The workloads and details on
+experiments are described below.
+
+| Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert | 
+| - | - | - | - | - | - |
+| - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec |
+| [parlay_hash](./README.md) | [24.3](timings/parlay_hash_128) | [19.0](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1113](timings/parlay_hash_128) | [354](timings/parlay_hash_128) |
+| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | --- | [11.8](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [53](timings/tbb_hash_128) | [22](timings/tbb_hash_128) |
+| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.6](timings/libcuckoo_128) | [13.0](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [295](timings/libcuckoo_128) |
+| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.8](timings/folly_hash_128) | [10.5](timings/folly_hash_1) | [107](timings/folly_hash_16) | [164](timings/folly_hash_128) | [231](timings/folly_hash_128) |
+| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_128) | [21.5](timings/boost_hash_1) | [115](timings/boost_hash_16) | [60](timings/boost_hash_128) | [29](timings/boost_hash_128) |
+| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_128) | [18.3](timings/parallel_hashmap_1) | [85](timings/parallel_hashmap_16) | [105](timings/parallel_hashmap_128) | [169](timings/parallel_hashmap_128) |
+| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_128) | [17.3](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [112](timings/folly_sharded_128) | [330](timings/folly_sharded_128) |
+| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [34.3](timings/seq_hash_128) | [19.6](timings/seq_hash_1) | [125](timings/seq_hash_16) | [107](timings/seq_hash_128) | [289](timings/seq_hash_128) |
+| [abseil (sequential)](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [32.6](timings/abseil_1) | --- | --- | --- |
+| [folly_F14 (sequential)](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [26.8](timings/folly_F14_1) | --- | --- | --- |
+| [std_hash (sequential)](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.7](timings/std_hash_1) | [13.0](timings/std_hash_1) | --- | --- | --- | 
+
+| Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert | 
+| - | - | - | - | - | - | 
+| - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec | 
+| [parlay_hash](./README.md) | [26.2](timings/parlay_hash_1) | [18.9](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1113](timings/parlay_hash_128) | [353](timings/parlay_hash_128) | 
+| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | [0.0](timings/tbb_hash_1) | [11.8](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [52](timings/tbb_hash_128) | [22](timings/tbb_hash_128) | 
+| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.5](timings/libcuckoo_1) | [12.9](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [295](timings/libcuckoo_128) | 
+| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.8](timings/folly_hash_1) | [10.4](timings/folly_hash_1) | [106](timings/folly_hash_16) | [163](timings/folly_hash_128) | [231](timings/folly_hash_128) | 
+| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_1) | [17.2](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [111](timings/folly_sharded_128) | [329](timings/folly_sharded_128) | 
+| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_1) | [21.5](timings/boost_hash_1) | [115](timings/boost_hash_16) | [59](timings/boost_hash_128) | [28](timings/boost_hash_128) | 
+| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_1) | [18.2](timings/parallel_hashmap_1) | [84](timings/parallel_hashmap_16) | [104](timings/parallel_hashmap_128) | [169](timings/parallel_hashmap_128) | 
+| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [33.3](timings/seq_hash_1) | [19.6](timings/seq_hash_1) | [124](timings/seq_hash_16) | [107](timings/seq_hash_128) | [289](timings/seq_hash_128) | 
+| [abseil](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [32.6](timings/abseil_1) |  --- | --- | --- |
+| [folly_F14](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [26.8](timings/folly_F14_1) |  --- | --- | --- |
+| [std_hash](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.6](timings/std_hash_1) | [13.0](timings/std_hash_1) |  --- | --- | --- |
+
+
+All performance numbers are in millions of operations per second
+(Mops/sec or mops).  All experiments were run on AWS EC2 c6i
+instances, which are Intel Xeon Ice Lake processors (more details
+below).
+The `threads` columns are for a mix of insert/delete/find operations on different numbers of threads.
+The `insert`  column is for inserting 10M unique keys on 128 
+threads with the table initialized to the correct final size.
+The `memory` column is the memory usage per entry (in bytes) of the hash table
+
+Details across the workloads can be found by clicking on the numbers.
+At 128 threads `parlay_hash` is faster across all workloads compared
+to all other hash tables listed.  Most of the others are particularly
+bad under high contention.  The exception is `folly_hash`, which does
+reasonably well under contention, but istead is bad under update heavy
+workloads.  It also uses a lot of memory.
+
 ## Interface
 
 The library supports the following interface for any copyable key type `K` and value type `V`.
 
-- `parlay::unordered_map<K,V,Hash=std::hash<K>,Equal=std::equal_to<K>>(long n, bool cleanup=false)` :
+- `parlay::parlay_unordered_map<K,V,Hash=std::hash<K>,Equal=std::equal_to<K>>(long n, bool cleanup=false)` :
 constructor for map of initial size n.  If `cleanup` is set, all memory pools and scheduler threads will
 be cleaned up on destruction, otherwise they can be shared among hash maps.
 
-- `find(const K&) -> std::optional<V>` : If the key is in the map, returns the value associated
+- `Find(const K&) -> std::optional<V>` : If the key is in the map, returns the value associated
   with it, otherwise returns std::nullopt.
 
-- `insert(const K&, const V&) -> bool` : If the key is in the map, returns false, otherwise inserts the key
-with the given value and returns true.
+- `Find(const K&, (const V&) -> T) -> std::optional<T>` : Same as
+  `Find(k)` but, if found, applies the function to the value and returns the result.
+  Can be useful if `V` is large and only a summary is needed.
 
-- `remove(const K&) -> bool` : If the key is in the map, removes the
-  key-value and returns true, otherwise it returns false.
+- `Insert(const K&, const V&) -> std::optional<V>` : If the key is in
+the map, returns the value without doing an update, otherwise inserts the key with the
+given value and returns std::nullopt.
 
-- `upsert(const K&, (const std::optional<V>&) -> V)) -> bool` : If the
+- `Insert(const K&, const V&, (const V&) -> T) -> std::optional<T>` : Same as `Insert(k,v)` but, if
+already in the table, applies the function to value and returns the result.
+
+- `Remove(const K&) -> std::optional<V>` : If the key is in the map, removes the
+  key-value and returns the value, otherwise it returns std::nullopt.
+
+- `Remove(const K&, (const V&) -> T) -> std::optional<T>` : Same as `Remove(k)` but, if removed,
+applies the function to the removed value and returns the result.
+
+- `Upsert(const K&, const V&) -> std::optional<V>` : If the key is in the map, updates
+the value with given value and returns the old value, otherwise inserts the key value pair
+and returns std::nullopt.
+
+- `Upsert(const K&, (const std::optional<V>&) -> V)) -> std::optional<V>` : If the
 key is in the map with an associated value v then it applies the function (second argument)
 to `std::optional<V>(v)`, replaces the current value for the key with the
-returned value, and returns false.  Otherwise it applies the
+returned value, and returns the old value.  Otherwise it applies the
 function to std::nullopt and inserts the key into the map with the
-returned value, and returns true.   For example using: `[&] (auto x) {return v;}` will just set
-the given key to have value v whether it was in there or not. 
+returned value, and returns std::nullopt.   For example: `Upsert(k, [&] (auto v) {return (v.has_value()) ? *v + 1 : 1;})` will atomically increment the value by 1 if there, or set the value to 1 if not.
 
 - `size() -> long` : Returns the number of elements in the map.
 Runs in **parallel** and does work proportional to the
@@ -47,43 +112,25 @@ invocation or is inserted after its response.  This means, for
 example, that if there are no concurrent updates, it returns the
 correct size.  
 
-- `entries() -> parlay::sequence<std::pair<K,V>>` : Returns a [parlay]
-(https://github.com/cmuparlay/parlaylib) sequence
-containing all the entries of the map as key-value pairs.  Runs in
-**parallel** and takes work proportional to the number of elements in
-the hash map.  Safe to run with other operations, but is not
-linearizable with updates.  Its concurrency semantics are the same as
-for `size`.
+- `for_each(std::pair<K,V> -> void) -> void` :
+Applies the given function to each element in the map.  Has the same weakly linearizable properties as
+size.
 
-<!---
+- `clear() -> void` : Clears all entries of the map.   It does not resize.
+
 The type for keys (K) and values (V) must be copyable, and might be
 copied by the hash map even when not being updated (e.g. when
 another key in the same bucket is being updated).
---->
 
 A simple example can be found in [examples/example.cpp](examples/example.cpp)
 
 The library supports growable hash maps, although if the proper size
 is given on construction, no growing will be needed.  The number of
 buckets increase by a constant factor when any bucket gets too large.
-The copying is done incrementally by each update, allowing for a
-mostly lock-free implementation.  Queries (finds) are still wait-free,
-but updates can take a fine-grained lock (on a block of buckets) when
-the hash map is growing.  Also allocation of a new **uninitialized
-array** for the buckets at the start of a grow cycle takes a lock to
-avoid multiple allocations, and since the allocator will most likely
-take a lock anyway for large arrays.
+The copying is done incrementally by each update.
 
-By default the implementations are lock free (or mostly lock free when
-growing).  However, we also support locked-based versions by defining
-`USE_LOCKS`.  In the locked-based version, queries (finds) will still
-be wait free, but updates take locks.  One advantage of the lock-based
-version is that the function passed to `upsert` will be run in
-isolation (i.e., mutually exclusive of any other invocation of the
-function by an upsert on the same key) and just once.  With the
-lock-free version the function could be run multiple times
-concurrently, although the value of only one will be used.
-
+There is also a `parlay::parlay_unordered_set` that supports sets of keys.  It has a similar
+interface.
 
 ## Benchmarks
 
@@ -104,19 +151,30 @@ the benchmarks:
 In addition to our hash map, the repository includes the following open source hash maps:
 - ./tbb_hash            ([tbb concurrent hash map](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html))
 - ./libcuckoo           ([libcuckoo's cuckooohash_map](https://github.com/efficient/libcuckoo))
-- ./growt               ([growt's concurrent hash map](https://github.com/TooBiased/growt))
 - ./folly_hash          ([folly's ConcurrentHashMap](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h))
 - ./boost_hash          ([boost's concurrent_flat_map](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent))
-- ./parallel_hashmap    ([parallel hashmap](https://github.com/greg7mdp/parallel-hashmap))
-- ./folly_sharded       (our own sharded version using folly's efficient [non-concurrent F14map](https://github.com/facebook/folly/blob/main/folly/container/F14Map.h))
-- ./abseil_sharded      (our own sharded version using folly's efficient [non-concurrent flat_hash_map](https://abseil.io/docs/cpp/guides/container))
-- ./std_sharded         (our own sharded version of std::unordered_map)
+- ./parallel_hashmap    ([parallel hashmap](https://github.com/greg7mdp/parallel-hashmap)) **
+- ./seq_hash    ([seq's concurrent hashmap](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md)) **
+- ./folly_sharded       (our own sharded version using folly's efficient [non-concurrent F14map](https://github.com/facebook/folly/blob/main/folly/container/F14Map.h)) **
+- ./std_sharded         (our own sharded version of std::unordered_map) **
+
+<!--- 
+- ./growt               ([growt's concurrent hash map](https://github.com/TooBiased/growt))
+--->
 
 For some of these you need to have the relevant library installed
-(e.g., boost, folly, abseil, tbb).  All of the hash maps except the
-sharded versions are designed to grow.  All of them support arbitrary
+(e.g., boost, folly, abseil, tbb).  All of them support arbitrary
 copyable key and value types when supplied hash and equality functions
 for the keys.
+
+The tables marked with ** are "semi" growable.  In particular they are all
+sharded and to perform well one needs to select the right number of
+shards, which depends on the expected size and number of threads.  For
+the experiments given below we selected 2^14 shards unless the library
+limited the number of shards to a smaller number, in which case we
+picked the largest number.  We note this would be very wasteful for
+small tables, requiring hundreds of thousands of bytes even for a
+table with a single entry.
 
 Adding another hash table simply requires adding a stub file `other/<myhash>/unordered_map.h`
 (e.g., see [other/boost/hash/unordered_map.h](other/boost/hash/unordered_map.h))
@@ -127,18 +185,70 @@ and adding a line of the form:
 to [CMakeFile.txt](benchmarks/CMakeFiles.txt).
 
 The benchmarks will run by default on the number of hardware threads
-you have on your machine.  They will run over two data sizes (100K and
-10M), two update percents (5% and 50%), and two distributions (uniform
-and zipfian=.99).  This is a total of 8 workloads since all
-combinations are tried.  The updates are 50% insertions (without
-replacement if already there) and 50% removes, the rest of the
-operations are finds.  For example, the 50% update workload will have
-25% insertions, 25% removes, and 50% finds.  The key-value pairs
-consist of two longs.  The experiment is set up so 1/2 the insertions
-and 1/2 the removes are successful on average.
+you have on your machine.
 
-Performance is reported in millions of operations-per-second (mops) for
-each combination.  The geometric mean over all combinations is also reported.
+## Workloads
+
+The experiments run a variety of workloads and report a geometric mean across the workloads.
+The default workloads are the following:
+
+- Table of long keys and long values : will run over two data sizes
+(10K and 10M), three update percents (0%, 10% and 50%), and two
+distributions (uniform and zipfian=.99).  This is a total of 12
+workloads since all combinations are tried.  The updates are 50%
+insertions (without replacement if already there) and 50% removes, the
+rest of the operations are finds.  For example, the 50% update
+workload will have 25% insertions, 25% removes, and 50% finds.
+We note that zipfian .99 is what is suggested by the YCSB [Yahoo Cloud
+Serving Benchmark](https://research.yahoo.com/news/yahoo-cloud-serving-benchmark) as a good model for the skew of real-world
+data used in key value stores.
+
+- Set of ints: will run over over 2 sizes (10K and 10M) with update
+percent set 10% and zipfian set to zero.  This is to test how it does
+and small entries.
+
+- Table of strings for keys, and 4-tuples of longs for values.  The
+keys are selected from a trigram distribution, so they have skew that
+is meant to represents the skew of word probabilities in the English
+Language.  The experiment runs over a single map size (about 1.2
+Million entries) and three updated percents (0%, 10% and 50%).
+
+In addition to reporting the performance in operations per second, it
+reports the performance to fill the initial table using inserts.
+It reports the geometric mean for the largest experiment across the
+three types (i.e 10M for long-long and int, and 1.2M for strings).
+
+Finally it reports the geometric mean of the number of bytes used per
+element for the hash tables that use each of the three types
+(long-long, int, string-4xlong).  This is total memory as measured by
+jemalloc (i.e. difference in allocated memory from before the table is
+created until after it is created and all n elements are inserted).
+Note the perfect number (i.e., no wasted memory) would be
+(16 x 4 x 56)^(1/3) = 15.3 (long-long = 16 bytes, int = 4 bytes
+string-4xlong = 24 + 4*8 = 56 bytes).  Hence, for example, 30 would
+indicate approximately a factor of 2x overhead.
+
+## Timings
+
+The timings reported in the table are for an AWS EC2 c6i.large
+instance for one thread, an AWS EC2 c6i.4xlarge instance for 16
+threads, and a c6i.32xlarge instance for 128 threads.  These all use
+Intel Xeon Ice Lake chips, and are 2 way hyperthreaded (e.g. the
+c6i.32xlarge has 64 cores, corresponding to 128 hyperthreads).  All
+timings are on the Ubuntu (linux) OS.  The c6i.32xlarge has two nodes
+so we use "numactl -i all" to distribute the memory across the two
+nodes for all experiments.  This slightly improves average
+performance, but more importantly makes the performance more stable.
+We set hugepages to "always", which reduces the number of TLB
+(translation lookaside buffer) misses for both ours and all the other
+hash tables.  In particular on Ubuntu we use: `echo always >
+/sys/kernel/mm/transparent_hugepage/enabled`.  This needs to be done
+in privileged mode (i.e., using `sudo`).  It improves performance on
+average across workloads by about ten percent, with larger gains on
+larger sizes.
+
+## Options
+
 Options include:
 
     -n <size>  : just this size
@@ -150,96 +260,22 @@ Options include:
     -r <num rounds>  : number of rounds for each size/update-percent/zipfian, default = 2
     -p <num threads> 
 
-## Timings
-
-Here are some timings on a AWS EC2 c6i.metal instance.  This machine
-has two Intel Xeon Ice Lake chips with 32 cores each.  Each core is
-2-way hyperthreaded, for a total of 128 threads.  Each number reports
-the geometric mean of mops over the eight workloads mentioned above
-(two sizes x two update rates x two distributions).  For our hash map,
-we show both the times for the locked (lock) and lock free (lf)
-versions.  Times were taken for code available November 2023.
-
-Columns 2 through 4 correspond to 1 thread, 16 threads (8 cores) and
-128 threads (64 cores) when the hash map is initialized to the correct
-size.  The fifth column is the same but when the hash map is
-initialized with size 1 (i.e., it first grows to the full size and
-then the timings start).  This is meant to test if the hash map grows
-effectively, which all the growing maps do.  The sixth column is for
-inserting 10M unique keys on 128 threads when the hash map starts with
-size 1 (i.e., it includes the time for growing the hash map multiple
-times).
-
-| Hash Map | 1 thread | 16 threads | 128 threads | 128 grown | 128 insert |
-| - | - | - | - | - | - |
-| parlay_hash lf | 15.9 | 162 | 651 | 631 | 112 |
-| parlay_hash lock | 16.1 | 156 | 692 | 679 | 99 |
-| tbb_hash | 9.3 | 62.4 | 64.6 | 61.4 | 23 |
-| libcuckoo | 11.5 | 50.5 | 33.1 | 33.9 | 6.3 |
-| growt | 7.2 | 40.8 | 156 | 146 | 59 |
-| folly_hash | 11.9 | 82.4 | failed | failed | 41 |
-| boost_hash | 24.7 | 84.7 | 57.2 | 57.6 | 13.6 | 
-| parallel_hashmap | 24.4 | 17.8 | 10.4 | 11.4 | 8 |
-| folly_sharded | 16.5 | 76.9 | 125 |--- | --- |
-| abseil (sequential) | 40.1 | --- | --- | --- | --- |
-| std (sequential) | 13.2 | --- | --- | --- | --- |
-
-The folly ConcurrentHashMap failed on 128 threads (for version
-f53ec94, Nov 1, 2023).  We [reported the bug](https://github.com/facebook/folly/issues/2097) and the developers replied
-that it is due to a bug in their hazard-pointer implementation (a
-16-bit counter is overflowing).
-
-Many of the hash maps do badly on many threads under high contention.
-For example, here are the full results for `libcuckoo` on 128 threads:
-
-```
-./libcuckoo,5%update,n=100000,p=128,z=0,grow=0,insert_mops=181,mops=536
-./libcuckoo,5%update,n=10000000,p=128,z=0,grow=0,insert_mops=298,mops=385
-./libcuckoo,50%update,n=100000,p=128,z=0,grow=0,insert_mops=188,mops=448
-./libcuckoo,50%update,n=10000000,p=128,z=0,grow=0,insert_mops=296,mops=342
-./libcuckoo,5%update,n=100000,p=128,z=0.99,grow=0,insert_mops=187,mops=2
-./libcuckoo,5%update,n=10000000,p=128,z=0.99,grow=0,insert_mops=297,mops=2
-./libcuckoo,50%update,n=100000,p=128,z=0.99,grow=0,insert_mops=185,mops=1
-./libcuckoo,50%update,n=10000000,p=128,z=0.99,grow=0,insert_mops=296,mops=3
-benchmark geometric mean of mops = 33.0592
-initial insert geometric mean of mops = 234.931
-```
-
-The last four workloads are for z=.99 (zipfian parameter .99), and it does abysmally on these.  In comparison here is the full
-result for `parlay_hash`:
-
-```
-./parlay_hash,5%update,n=100000,p=128,z=0,grow=0,insert_mops=83,mops=2024            
-./parlay_hash,5%update,n=10000000,p=128,z=0,grow=0,insert_mops=226,mops=659          
-./parlay_hash,50%update,n=100000,p=128,z=0,grow=0,insert_mops=123,mops=698           
-./parlay_hash,50%update,n=10000000,p=128,z=0,grow=0,insert_mops=318,mops=470         
-./parlay_hash,5%update,n=100000,p=128,z=0.99,grow=0,insert_mops=105,mops=1056        
-./parlay_hash,5%update,n=10000000,p=128,z=0.99,grow=0,insert_mops=318,mops=969       
-./parlay_hash,50%update,n=100000,p=128,z=0.99,grow=0,insert_mops=168,mops=216        
-./parlay_hash,50%update,n=10000000,p=128,z=0.99,grow=0,insert_mops=317,mops=333      
-benchmark geometric mean of mops = 651.735                                           
-initial insert geometric mean of mops = 184.35
-```
-
-We note that zipfian .99 is what is suggested by the YCSB [Yahoo Cloud
-Serving Benchmark](https://research.yahoo.com/news/yahoo-cloud-serving-benchmark) as a good model for the skew of real-world
-data used in key value stores.
-
-
 ## Code Dependencies
-
-Our hash map uses [parlaylib](https://github.com/cmuparlay/parlaylib)
-for parallelism.  In particular the array of buckets is initialized in
-parallel, and the `size` and `entries` functions run in parallel.  The
-parlaylib files are included in the repository so it need not be
-installed.
-Note that parlaylib will start up threads as needed to run certain operations in parallel.   Once no longer needed, these will go to sleep but will still be around.
 
 The file [include/parlay_hash/unordered_map.h](include/parylay_hash/unordered_map.h) is mostly self contained.
 The only non C++ standard library files that it uses are the following:
 - [include/utils/epoch.h](include/utils/epoch.h), which is an implementation of epoch-based safe memory reclamation.   It supports the functions `New<T>(...args)` and `Retire(T* ptr)`, which correspond to `new` and `delete`.   The retire, however, delays destruction until it is safe to do so (i.e., when no operation that was running at the time of the retire is still running).
 - [include/utils/lock.h](include/utils/lock.h), which is a simple implementation of shared locks.  It is only used if you use the lock-based version of the parlay_hash.  The implementation has an array with a fixed number of locks (currently 65K), and a location is hashed to one of the locks in the array.   Each lock is a simple spin lock.    This file has no dependencies beyond the C++ standard library.
-- Files from the [include/parlaylib](include/parlaylib) library.
+
+ParlayHash optionally uses
+[parlaylib](https://github.com/cmuparlay/parlaylib), by defining the
+variable `USE_PARLAY`.  This will allow certain operations to run in
+parallel.  In particular the array of buckets is initialized in
+parallel, and the `size` and `entries` functions run in parallel.  The
+parlaylib files are included in the repository so it need not be
+installed.  Note that parlaylib will start up threads as needed to run
+certain operations in parallel.  Once no longer needed, these will go
+to sleep but will still be around.
 
 The other implementations (e.g. tbb, folly, ...) require the relevant libraries, but do not require `parlaylib` themselves.   However, our benchmarking harness uses `parlaylib` to run the benchmarks for all implementations.
 

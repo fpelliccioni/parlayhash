@@ -29,5 +29,3 @@ struct unordered_map {
 
   long size() {return table.size();}
 };
-
-

@@ -1,14 +1,23 @@
 #ifndef PARLAY_HASH_H_
 #define PARLAY_HASH_H_
 
+#include <algorithm>
+#include <atomic>
+#include <cmath>
 #include <functional>
+#include <iterator>
 #include <optional>
+#include <thread>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include <utils/epoch.h>
 #include "bigatomic.h"
 #include "parallel.h"
 
 constexpr bool PrintGrow = false;
-#define USE_PARLAY 1
 
 namespace parlay {
 
@@ -34,7 +43,7 @@ struct parlay_hash {
 
   // log_2 of the expected number of entries in a bucket (<= buffer_size)
   static constexpr long log_bucket_size = 
-    (buffer_size == 1) ? 0 : ((buffer_size == 2) ? 1 : ((buffer_size <= 4) ? 2 : ((buffer_size <= 8) ? 3 : 4)));
+    (buffer_size == 1) ? 0 : ((buffer_size == 2) ? 1 : ((buffer_size <= 4) ? 2 : ((buffer_size <= 8) ? 3 : 3)));
 
   static long get_block_size(int num_bits) {
     return num_bits < 16 ? 16 : 256; }
@@ -55,7 +64,7 @@ struct parlay_hash {
 
   // clear_at_end will cause the scheduler and epoch-based collector
   // to clear their state on destruction
-  static constexpr bool default_clear_at_end = false;
+  static constexpr bool default_clear_at_end = true;
   bool clear_memory_and_scheduler_at_end;
 
   // a reference to the scheduler (null if not to be cleared)
@@ -163,7 +172,7 @@ struct parlay_hash {
   // returns std::optional(f(entry)) for entry with given key
   template <typename F>
   static auto find_in_list(const link* nxt, const K& k, const F& f) {
-    using rtype = typename std::result_of<F(Entry)>::type;
+    using rtype = typename std::invoke_result<F,Entry>::type;
     long cnt = 0;
     while (nxt != nullptr && !nxt->entry.equal(k)) {
       nxt = nxt->next;
@@ -276,7 +285,7 @@ struct parlay_hash {
   // std::nullopt.
   template <typename F>
   auto find_in_state(const state& s, const K& k, const F& f)
-    -> std::optional<typename std::result_of<F(Entry)>::type>
+    -> std::optional<typename std::invoke_result<F,Entry>::type>
   {
     long len = s.buffer_cnt();
     for (long i = 0; i < std::min(len, buffer_size); i++)
@@ -347,7 +356,7 @@ struct parlay_hash {
 	block_size(num_bits < 10 ? min_block_size : get_block_size(num_bits)),
 	overflow_size(get_overflow_size(num_bits))
     {
-      if (PrintGrow) std::cout << "initial size: " << size << std::endl;
+      //if (PrintGrow) std::cout << "initial size: " << size << std::endl;
       buckets = (bucket*) malloc(sizeof(bucket)*size);
       block_status = (std::atomic<status>*) malloc(sizeof(std::atomic<status>) * size/block_size);
       parallel_for(size, [&] (long i) { initialize(buckets[i]);});
@@ -393,8 +402,8 @@ struct parlay_hash {
       get_locks().try_lock((long) ht, [&] {
 	 if (ht->next == nullptr) {
 	   ht->next = new table_version(ht);
-	   if (PrintGrow)
-	     std::cout << "expand to: " << n * grow_factor << std::endl;
+	   //if (PrintGrow)
+	   //  std::cout << "expand to: " << n * grow_factor << std::endl;
 	 }
 	 return true;});
     }
@@ -571,7 +580,7 @@ struct parlay_hash {
 		&epoch::get_default_pool<link>()),
       current_table_version(new table_version(n)),
       initial_table_version(current_table_version.load())
-  {}
+  { }
 
   ~parlay_hash() {
     clear(false);
@@ -605,7 +614,7 @@ struct parlay_hash {
   // unlikely.
   template <typename F>
   auto find_in_bucket_rec(table_version* t, bckt* s, const K& k, const F& f)
-    -> std::optional<typename std::result_of<F(Entry)>::type>
+    -> std::optional<typename std::invoke_result<F,Entry>::type>
   {
     state x = s->load();
     //if bucket is forwarded, go to next version
@@ -623,7 +632,7 @@ struct parlay_hash {
   // Hence one hand inline and one prefetch (not used anywhere else in code).
   template <typename F>
   auto Find(const K& k, const F& f)
-    -> std::optional<typename std::result_of<F(Entry)>::type>
+    -> std::optional<typename std::invoke_result<F,Entry>::type>
   {
     table_version* ht = current_table_version.load();
     long idx = ht->get_index(k);
@@ -639,14 +648,14 @@ struct parlay_hash {
       // if not found and not overfull, then done
       if (s.buffer_cnt() <= buffer_size) return std::nullopt;
       // otherwise need to search overflow, which requires protection
-      return epoch::with_epoch([&] {
+      return epoch::with_epoch([&, tag=tag, &s = s] {
         // if state has not changed, then just search list
 	if (b->lv(tag)) return find_in_list(s.overflow_list(), k, f).first;
 	return find_in_bucket_rec(ht, b, k, f);
       });
     } else { // if using indirection always use protection
       __builtin_prefetch(b); // allows read to be pipelined with epoch announcement
-      return epoch::with_epoch([&] () -> std::optional<typename std::result_of<F(Entry)>::type> {
+      return epoch::with_epoch([&] () -> std::optional<typename std::invoke_result<F,Entry>::type> {
 	  return find_in_bucket_rec(ht, b, k, f);});
 
 
@@ -659,73 +668,62 @@ struct parlay_hash {
   // contains f(e) if not, where e is the entry matching the key.
   template <typename Constr, typename F>
   auto Insert(const K& key, const Constr& constr, const F& f)
-    -> std::optional<typename std::result_of<F(Entry)>::type>
+    -> std::optional<typename std::invoke_result<F,Entry>::type>
   {
-    using rtype = std::optional<typename std::result_of<F(Entry)>::type>;
+    using rtype = std::optional<typename std::invoke_result<F,Entry>::type>;
+    return epoch::with_epoch([&] () -> rtype {
+			       auto [e, flag] = insert_(key, constr);
+			       if (flag) return {};
+			       return rtype(f(e));});
+  }
+
+  template <typename Constr>
+  auto insert_(const K& key, const Constr& constr) -> std::pair<Entry, bool> {
     table_version* ht = current_table_version.load();
     long idx = ht->get_index(key);
     auto b = &(ht->buckets[idx].v);
-    // if entries are direct, then safe to scan the buffer without epoch protection
-    if constexpr (Entry::Direct) {
+    int delay = 200;
+    while (true) {
       auto [s, tag] = b->ll();
       copy_if_needed(ht, idx);
       check_bucket_and_state(ht, key, b, s, tag, idx);
+      long len = s.buffer_cnt();
       // if found in buffer then done
-      for (long i = 0; i < std::min(s.buffer_cnt(), buffer_size); i++)
-	if (s.buffer[i].equal(key)) return f(s.buffer[i]);
-      if (s.buffer_cnt() < buffer_size) { // buffer has space, insert to end of buffer
-	Entry entry = constr();
-	if (b->sc(tag, state(s, entry))) return std::nullopt;
-	entries_->retire_entry(entry);
+      for (long i = 0; i < std::min(len, buffer_size); i++)
+	if (s.buffer[i].equal(key)) return std::pair(s.buffer[i], false);
+      if (len < buffer_size) { // buffer has space, insert to end of buffer
+	Entry new_e = constr();
+	if (b->sc(tag, state(s, new_e))) return std::pair(new_e, true);
+	entries_->retire_entry(new_e); // if failed need to ty again
+      } else if (len == buffer_size) { // buffer full, insert new link
+	Entry new_e = constr();
+	link* new_head = new_link(new_e, nullptr);
+	if (b->sc(tag, state(s, new_head))) 
+	  return std::pair(new_e, true);
+	entries_->retire_entry(new_head->entry); // if failed need to try again
+	retire_link(new_head);
+      } else { // buffer overfull, need to check if in list
+	auto [x, list_len] = find_in_list(s.overflow_list(), key, identity);
+	if (list_len + buffer_size > ht->overflow_size) expand_table(ht);
+	if (x.has_value()) return std::pair(*x, false); // if in list, then done
+	Entry new_e = constr();
+	link* new_head = new_link(new_e, s.overflow_list());
+	if (b->sc(tag, state(s, new_head))) // try to add to head of list
+	  return std::pair(new_e, true);
+	entries_->retire_entry(new_head->entry); // if failed need to ty again
+	retire_link(new_head);
       }
+      // delay before trying again, only marginally helps
+      for (volatile int i=0; i < delay; i++);
+      delay = std::min(2*delay, 5000); // 1000-10000 are about equally good
     }
-    // if indirect, or not found in buffer and buffer overfull then protect
-    return epoch::with_epoch([&] () -> rtype {
-      int delay = 200;
-      while (true) {
-	auto [s, tag] = b->ll();
-	copy_if_needed(ht, idx);
-	check_bucket_and_state(ht, key, b, s, tag, idx);
-	long len = s.buffer_cnt();
-	// if found in buffer then done
-	for (long i = 0; i < std::min(len, buffer_size); i++)
-	  if (s.buffer[i].equal(key)) return f(s.buffer[i]);
-	if (len < buffer_size) { // buffer has space, insert to end of buffer
-	  Entry new_e = constr();
-	  if (b->sc(tag, state(s, new_e))) return std::nullopt;
-	  entries_->retire_entry(new_e); // if failed need to ty again
-	} else if (len == buffer_size) { // buffer full, insert new link
-	  link* new_head = new_link(constr(), nullptr);
-	  if (b->sc(tag, state(s, new_head))) 
-	    return std::nullopt;
-	  entries_->retire_entry(new_head->entry); // if failed need to try again
-	  retire_link(new_head);
-	} else { // buffer overfull, need to check if in list
-	  auto [x, list_len] = find_in_list(s.overflow_list(), key, f);
-	  if (list_len + buffer_size > ht->overflow_size) expand_table(ht);
-	  if (x.has_value()) return x; // if in list, then done
-	  link* new_head = new_link(constr(), s.overflow_list());
-	  if (b->sc(tag, state(s, new_head))) // try to add to head of list
-	    return std::nullopt;
-	  entries_->retire_entry(new_head->entry); // if failed need to ty again
-	  retire_link(new_head);
-	}
-	// delay before trying again, only marginally helps
-	for (volatile int i=0; i < delay; i++);
-	delay = std::min(2*delay, 5000); // 1000-10000 are about equally good
-      }
-    });
   }
 
-    // Inserts at key, and does nothing if key already in the table.
-  // The constr function construct the entry to be inserted if needed.
-  // Returns an optional, which is empty if sucessfully inserted or
-  // contains f(e) if not, where e is the entry matching the key.
   template <typename Constr, typename G>
   auto Upsert(const K& key, const Constr& constr, G& g)
-    -> std::optional<typename std::result_of<G(Entry)>::type>
+    -> std::optional<typename std::invoke_result<G,Entry>::type>
   {
-    using rtype = std::optional<typename std::result_of<G(Entry)>::type>;
+    using rtype = std::optional<typename std::invoke_result<G,Entry>::type>;
     table_version* ht = current_table_version.load();
     long idx = ht->get_index(key);
     auto b = &(ht->buckets[idx].v);
@@ -791,9 +789,9 @@ struct parlay_hash {
   // and contains f(e) otherwise, where e is the entry that is removed.
   template <typename F>
   auto Remove(const K& key, const F& f)
-    -> std::optional<typename std::result_of<F(Entry)>::type>
+    -> std::optional<typename std::invoke_result<F,Entry>::type>
   {
-    using rtype = std::optional<typename std::result_of<F(Entry)>::type>;
+    using rtype = std::optional<typename std::invoke_result<F,Entry>::type>;
     table_version* ht = current_table_version.load();
     long idx = ht->get_index(key);
     auto b = &(ht->buckets[idx].v);
@@ -880,14 +878,14 @@ struct parlay_hash {
   }
 
   template <typename F>
-  void for_each_buckect_rec(table_version* t, long i, const F& f) {
+  void for_each_bucket_rec(table_version* t, long i, const F& f) {
     state s = t->buckets[i].v.load();
     if (!s.is_forwarded())
-      for_each_in_state(s);
+      for_each_in_state(s, f);
     else {
       table_version* next = t->next.load();
       for (int j = 0; j < grow_factor; j++)
-	for_each_in_bucket_rec(next, grow_factor * i + j, f);
+	for_each_bucket_rec(next, grow_factor * i + j, f);
     }
   }
 
@@ -915,7 +913,7 @@ struct parlay_hash {
     table_version* ht = current_table_version.load();
     return epoch::with_epoch([&] {
       for(long i = 0; i < ht->size; i++)
-	for_each_buckect_rec(ht, i, f);});
+	for_each_bucket_rec(ht, i, f);});
   }
 
   // *********************************************
@@ -994,13 +992,12 @@ struct parlay_hash {
   static constexpr auto identity = [] (const Entry& entry) {return entry;};
   static constexpr auto true_f = [] (const Entry& entry) {return true;};
 
+  
   template <typename Constr>
   std::pair<Iterator,bool> insert(const K& key, const Constr& constr) {
-    auto r = Insert(key, constr, true_f);
-    if (r.has_value())
-      return std::pair(Iterator(*r), false);
-    // not correct
-    return std::pair(Iterator(true), true);
+    return epoch::with_epoch([&] {
+      auto [e,flag] = insert_(key, constr);
+      return std::pair(Iterator(e), flag);});
   }
 
   Iterator erase(Iterator pos) {
@@ -1111,7 +1108,7 @@ struct parlay_hash {
       using K = typename DataS::K;
       using Key = K;
       static const bool Direct = true;
-      Data data;
+      Data data; 
       static unsigned long hash(const Key& k) {
 	return rehash<Hash>{}(Hash{}(k));}
       bool equal(const Key& k) const { return KeyEqual{}(get_key(), k); }
@@ -1129,6 +1126,55 @@ struct parlay_hash {
     // retiring is a noop since no memory has been allocated for entries
     void retire_entry(Entry& e) {}
   };
+
+  // template <typename EntryData>
+  // struct DirectEntriesX {
+  //   using DataS = EntryData;
+  //   using Data = typename DataS::value_type;
+  //   using Hash = typename DataS::Hash;
+  //   using KeyEqual = typename DataS::KeyEqual;
+  //   using K = typename DataS::K;
+
+  //   struct Entry {
+  //     using K = typename DataS::K;
+  //     using Key = K;
+  //     static const bool Direct = true;
+  //     std::array<long,1 + (sizeof(Data)-1)/8> data;
+  //     static unsigned long hash(const Key& k) {
+  // 	return rehash<Hash>{}(Hash{}(k));}
+  //     bool equal(const Key& k) const { return KeyEqual{}(get_key(), k); }
+  //     static Key make_key(const K& k) {return k;}
+  //     const K& get_key() const { return DataS::get_key(*((Data*) &data));}
+  //     const Data& get_entry() const { return *((Data*) &data);}
+  //     Entry(const Data& d) { new (&data) Data(d); }
+  //     Entry() {}
+  //   };
+
+  //   bool clear_at_end;
+
+  //   // a memory pool for the entries
+  //   epoch::retire_pool<Data>* data_pool;
+
+  //   DirectEntriesX(bool clear_at_end=false) 
+  //     : clear_at_end(clear_at_end),
+  // 	data_pool(clear_at_end ?
+  //   		  new epoch::retire_pool<Data>() :
+  //   		  &epoch::get_default_retire_pool<Data>())
+  //   {}
+  //   ~DirectEntriesX() {
+  //     if (clear_at_end) { delete data_pool;}
+  //   }
+
+  //   // allocates memory for the entry
+  //   Entry make_entry(const K& k, const Data& data) {
+  //     return Entry(data);}
+
+  //   // retires the memory for the entry
+  //   void retire_entry(Entry& e) {
+  //     data_pool->Retire((Data*) &(e.data)); 
+  //   }
+  // };
+  
 
 }  // namespace parlay
 #endif  // PARLAY_HASH_H_

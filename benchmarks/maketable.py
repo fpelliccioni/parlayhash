@@ -1,6 +1,5 @@
-import math
-
 maps = [("parlay_hash", "./README.md"),
+        ("parlay_hash_2x", "./README.md"),
         ("tbb_hash", "https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html"),
         ("libcuckoo", "https://github.com/efficient/libcuckoo" ),
         ("folly_hash", "https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h"),
@@ -17,9 +16,8 @@ seq_maps = [("abseil", "https://abseil.io/docs/cpp/guides/container"),
 
 def t_float(float_number, decimal_places):
     if decimal_places == 0 :
-        return str(math.trunc(float_number))
-    multiplier = 10 ** decimal_places
-    return str(int(float_number * multiplier) / multiplier)
+        return str(int(round(float_number,0)))
+    return str(round(float_number, decimal_places))
 
 def get_nums(name, p) :
     filename = "../timings/" + name + "_" + str(p)
@@ -31,6 +29,7 @@ def get_nums(name, p) :
     return [insert_mops, exp_mops, size_pe]
 
 def gen_entry(val, ptr) :
+    if val == "0.0" : return "--- | "
     return "[" + val + "](" + ptr + ") | "
 
 def ptr_name(name, p) :
@@ -52,8 +51,9 @@ def gen_line(ht) :
 
 def gen_line_1(ht) :
     [name, url] = ht
+    fullname = name + " (sequential)"
     [im1, em1, s1] = get_nums(name, 1)
-    x = [(name, url),
+    x = [(fullname, url),
          (t_float(s1,1), ptr_name(name, 1)),
          (t_float(em1, 1), ptr_name(name, 1))]
     r = "| " + "".join([gen_entry(a[0],a[1]) for a in x]) + " --- | --- | --- |\n"

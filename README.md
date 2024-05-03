@@ -17,35 +17,20 @@ averages (geometric means) over a variety of work loads.  The workloads and deta
 experiments are described below.
 
 | Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert | 
-| - | - | - | - | - | - |
-| - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec |
-| [parlay_hash](./README.md) | [24.3](timings/parlay_hash_128) | [19.0](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1113](timings/parlay_hash_128) | [354](timings/parlay_hash_128) |
-| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | --- | [11.8](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [53](timings/tbb_hash_128) | [22](timings/tbb_hash_128) |
-| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.6](timings/libcuckoo_128) | [13.0](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [295](timings/libcuckoo_128) |
-| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.8](timings/folly_hash_128) | [10.5](timings/folly_hash_1) | [107](timings/folly_hash_16) | [164](timings/folly_hash_128) | [231](timings/folly_hash_128) |
-| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_128) | [21.5](timings/boost_hash_1) | [115](timings/boost_hash_16) | [60](timings/boost_hash_128) | [29](timings/boost_hash_128) |
-| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_128) | [18.3](timings/parallel_hashmap_1) | [85](timings/parallel_hashmap_16) | [105](timings/parallel_hashmap_128) | [169](timings/parallel_hashmap_128) |
-| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_128) | [17.3](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [112](timings/folly_sharded_128) | [330](timings/folly_sharded_128) |
-| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [34.3](timings/seq_hash_128) | [19.6](timings/seq_hash_1) | [125](timings/seq_hash_16) | [107](timings/seq_hash_128) | [289](timings/seq_hash_128) |
-| [abseil (sequential)](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [32.6](timings/abseil_1) | --- | --- | --- |
-| [folly_F14 (sequential)](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [26.8](timings/folly_F14_1) | --- | --- | --- |
-| [std_hash (sequential)](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.7](timings/std_hash_1) | [13.0](timings/std_hash_1) | --- | --- | --- | 
-
-| Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert | 
 | - | - | - | - | - | - | 
 | - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec | 
-| [parlay_hash](./README.md) | [26.2](timings/parlay_hash_1) | [18.9](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1113](timings/parlay_hash_128) | [353](timings/parlay_hash_128) | 
-| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | [0.0](timings/tbb_hash_1) | [11.8](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [52](timings/tbb_hash_128) | [22](timings/tbb_hash_128) | 
-| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.5](timings/libcuckoo_1) | [12.9](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [295](timings/libcuckoo_128) | 
-| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.8](timings/folly_hash_1) | [10.4](timings/folly_hash_1) | [106](timings/folly_hash_16) | [163](timings/folly_hash_128) | [231](timings/folly_hash_128) | 
-| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_1) | [17.2](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [111](timings/folly_sharded_128) | [329](timings/folly_sharded_128) | 
-| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_1) | [21.5](timings/boost_hash_1) | [115](timings/boost_hash_16) | [59](timings/boost_hash_128) | [28](timings/boost_hash_128) | 
-| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_1) | [18.2](timings/parallel_hashmap_1) | [84](timings/parallel_hashmap_16) | [104](timings/parallel_hashmap_128) | [169](timings/parallel_hashmap_128) | 
-| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [33.3](timings/seq_hash_1) | [19.6](timings/seq_hash_1) | [124](timings/seq_hash_16) | [107](timings/seq_hash_128) | [289](timings/seq_hash_128) | 
-| [abseil](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [32.6](timings/abseil_1) |  --- | --- | --- |
-| [folly_F14](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [26.8](timings/folly_F14_1) |  --- | --- | --- |
-| [std_hash](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.6](timings/std_hash_1) | [13.0](timings/std_hash_1) |  --- | --- | --- |
-
+| [parlay_hash](./README.md) | [26.3](timings/parlay_hash_1) | [21.4](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1130](timings/parlay_hash_128) | [370](timings/parlay_hash_128) | 
+| [parlay_hash_2x](./README.md) | [41.0](timings/parlay_hash_2x_1) | [24.4](timings/parlay_hash_2x_1) | [251](timings/parlay_hash_2x_16) | [1259](timings/parlay_hash_2x_128) | [393](timings/parlay_hash_2x_128) | 
+| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | --- | [13.2](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [54](timings/tbb_hash_128) | [23](timings/tbb_hash_128) | 
+| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.6](timings/libcuckoo_1) | [14.2](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [299](timings/libcuckoo_128) | 
+| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.9](timings/folly_hash_1) | [12.2](timings/folly_hash_1) | [107](timings/folly_hash_16) | [157](timings/folly_hash_128) | [237](timings/folly_hash_128) | 
+| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_1) | [19.4](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [116](timings/folly_sharded_128) | [329](timings/folly_sharded_128) | 
+| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_1) | [25.3](timings/boost_hash_1) | [115](timings/boost_hash_16) | [58](timings/boost_hash_128) | [30](timings/boost_hash_128) | 
+| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_1) | [22.0](timings/parallel_hashmap_1) | [85](timings/parallel_hashmap_16) | [112](timings/parallel_hashmap_128) | [185](timings/parallel_hashmap_128) | 
+| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [33.4](timings/seq_hash_1) | [23.5](timings/seq_hash_1) | [125](timings/seq_hash_16) | [105](timings/seq_hash_128) | [289](timings/seq_hash_128) | 
+| [abseil (sequential)](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [40.1](timings/abseil_1) |  --- | --- | --- |
+| [folly_F14 (sequential)](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [28.9](timings/folly_F14_1) |  --- | --- | --- |
+| [std_hash (sequential)](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.7](timings/std_hash_1) | [15.0](timings/std_hash_1) |  --- | --- | --- |
 
 All performance numbers are in millions of operations per second
 (Mops/sec or mops).  All experiments were run on AWS EC2 c6i
@@ -60,8 +45,10 @@ Details across the workloads can be found by clicking on the numbers.
 At 128 threads `parlay_hash` is faster across all workloads compared
 to all other hash tables listed.  Most of the others are particularly
 bad under high contention.  The exception is `folly_hash`, which does
-reasonably well under contention, but istead is bad under update heavy
+reasonably well under contention, but instead is bad under update heavy
 workloads.  It also uses a lot of memory.
+`parlay_hash_2x` is the same as `parlay_hash` but with the table
+initialized to size 2n instead of n.
 
 ## Interface
 
@@ -192,7 +179,7 @@ you have on your machine.
 The experiments run a variety of workloads and report a geometric mean across the workloads.
 The default workloads are the following:
 
-- Table of long keys and long values : will run over two data sizes
+- Table of long (8 byte integers) keys and long values : will run over two data sizes
 (10K and 10M), three update percents (0%, 10% and 50%), and two
 distributions (uniform and zipfian=.99).  This is a total of 12
 workloads since all combinations are tried.  The updates are 50%
@@ -203,7 +190,7 @@ We note that zipfian .99 is what is suggested by the YCSB [Yahoo Cloud
 Serving Benchmark](https://research.yahoo.com/news/yahoo-cloud-serving-benchmark) as a good model for the skew of real-world
 data used in key value stores.
 
-- Set of ints: will run over over 2 sizes (10K and 10M) with update
+- Set of ints (4-byte integers): will run over over 2 sizes (10K and 10M) with update
 percent set 10% and zipfian set to zero.  This is to test how it does
 and small entries.
 

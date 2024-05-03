@@ -4,7 +4,7 @@ maps = [("parlay_hash", "./README.md"),
         ("libcuckoo", "https://github.com/efficient/libcuckoo" ),
         ("folly_hash", "https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h"),
         ("folly_sharded", "other/folly_sharded/unordered_map.h"),
-        ("boost_hash", "https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent"),
+        ("boost_hash", "https://www.boost.org/doc/libs/1_85_0/libs/unordered/doc/html/unordered.html#concurrent"),
         ("parallel_hashmap", "https://github.com/greg7mdp/parallel-hashmap"),
         ("seq_hash", "https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md")
 ]
@@ -68,4 +68,4 @@ def gen_lines() :
     lines = header + [gen_line(x) for x in maps] + [gen_line_1(x) for x in seq_maps]
     for l in lines: file.write(l)
     file.close()
-    
+

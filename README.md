@@ -16,18 +16,18 @@ most widely used open-source concurrent hash tables.  These numbers are
 averages (geometric means) over a variety of work loads.  The workloads and details on
 experiments are described below.
 
-| Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert | 
-| - | - | - | - | - | - | 
-| - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec | 
-| [parlay_hash](./README.md) | [26.3](timings/parlay_hash_1) | [21.4](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1130](timings/parlay_hash_128) | [370](timings/parlay_hash_128) | 
-| [parlay_hash_2x](./README.md) | [41.0](timings/parlay_hash_2x_1) | [24.4](timings/parlay_hash_2x_1) | [251](timings/parlay_hash_2x_16) | [1259](timings/parlay_hash_2x_128) | [393](timings/parlay_hash_2x_128) | 
-| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | --- | [13.2](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [54](timings/tbb_hash_128) | [23](timings/tbb_hash_128) | 
-| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.6](timings/libcuckoo_1) | [14.2](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [299](timings/libcuckoo_128) | 
-| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.9](timings/folly_hash_1) | [12.2](timings/folly_hash_1) | [107](timings/folly_hash_16) | [157](timings/folly_hash_128) | [237](timings/folly_hash_128) | 
-| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_1) | [19.4](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [116](timings/folly_sharded_128) | [329](timings/folly_sharded_128) | 
-| [boost_hash](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_1) | [25.3](timings/boost_hash_1) | [115](timings/boost_hash_16) | [58](timings/boost_hash_128) | [30](timings/boost_hash_128) | 
-| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_1) | [22.0](timings/parallel_hashmap_1) | [85](timings/parallel_hashmap_16) | [112](timings/parallel_hashmap_128) | [185](timings/parallel_hashmap_128) | 
-| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [33.4](timings/seq_hash_1) | [23.5](timings/seq_hash_1) | [125](timings/seq_hash_16) | [105](timings/seq_hash_128) | [289](timings/seq_hash_128) | 
+| Hash Map | Memory | 1 thread | 16 threads | 128 threads | 128 insert |
+| - | - | - | - | - | - |
+| - | bytes/elt | Mops/sec | Mops/sec | Mops/sec | Mops/sec |
+| [parlay_hash](./README.md) | [26.3](timings/parlay_hash_1) | [21.4](timings/parlay_hash_1) | [214](timings/parlay_hash_16) | [1130](timings/parlay_hash_128) | [370](timings/parlay_hash_128) |
+| [parlay_hash_2x](./README.md) | [41.0](timings/parlay_hash_2x_1) | [24.4](timings/parlay_hash_2x_1) | [251](timings/parlay_hash_2x_16) | [1259](timings/parlay_hash_2x_128) | [393](timings/parlay_hash_2x_128) |
+| [tbb_hash](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html) | --- | [13.2](timings/tbb_hash_1) | [71](timings/tbb_hash_16) | [54](timings/tbb_hash_128) | [23](timings/tbb_hash_128) |
+| [libcuckoo](https://github.com/efficient/libcuckoo) | [43.6](timings/libcuckoo_1) | [14.2](timings/libcuckoo_1) | [58](timings/libcuckoo_16) | [29](timings/libcuckoo_128) | [299](timings/libcuckoo_128) |
+| [folly_hash](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h) | [91.9](timings/folly_hash_1) | [12.2](timings/folly_hash_1) | [107](timings/folly_hash_16) | [157](timings/folly_hash_128) | [237](timings/folly_hash_128) |
+| [folly_sharded](other/folly_sharded/unordered_map.h) | [34.5](timings/folly_sharded_1) | [19.4](timings/folly_sharded_1) | [84](timings/folly_sharded_16) | [116](timings/folly_sharded_128) | [329](timings/folly_sharded_128) |
+| [boost_hash](https://www.boost.org/doc/libs/1_85_0/libs/unordered/doc/html/unordered.html#concurrent) | [37.9](timings/boost_hash_1) | [25.3](timings/boost_hash_1) | [115](timings/boost_hash_16) | [58](timings/boost_hash_128) | [30](timings/boost_hash_128) |
+| [parallel_hashmap](https://github.com/greg7mdp/parallel-hashmap) | [36.0](timings/parallel_hashmap_1) | [22.0](timings/parallel_hashmap_1) | [85](timings/parallel_hashmap_16) | [112](timings/parallel_hashmap_128) | [185](timings/parallel_hashmap_128) |
+| [seq_hash](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md) | [33.4](timings/seq_hash_1) | [23.5](timings/seq_hash_1) | [125](timings/seq_hash_16) | [105](timings/seq_hash_128) | [289](timings/seq_hash_128) |
 | [abseil (sequential)](https://abseil.io/docs/cpp/guides/container) | [36.0](timings/abseil_1) | [40.1](timings/abseil_1) |  --- | --- | --- |
 | [folly_F14 (sequential)](https://engineering.fb.com/2019/04/25/developer-tools/f14/) | [24.7](timings/folly_F14_1) | [28.9](timings/folly_F14_1) |  --- | --- | --- |
 | [std_hash (sequential)](https://en.cppreference.com/w/cpp/container/unordered_map) | [44.7](timings/std_hash_1) | [15.0](timings/std_hash_1) |  --- | --- | --- |
@@ -37,7 +37,7 @@ All performance numbers are in millions of operations per second
 instances, which are Intel Xeon Ice Lake processors (more details
 below).
 The `threads` columns are for a mix of insert/delete/find operations on different numbers of threads.
-The `insert`  column is for inserting 10M unique keys on 128 
+The `insert`  column is for inserting 10M unique keys on 128
 threads with the table initialized to the correct final size.
 The `memory` column is the memory usage per entry (in bytes) of the hash table
 
@@ -97,7 +97,7 @@ includes any elements that are in there from its invocation until its
 response, and never includes an element that is removed before its
 invocation or is inserted after its response.  This means, for
 example, that if there are no concurrent updates, it returns the
-correct size.  
+correct size.
 
 - `for_each(std::pair<K,V> -> void) -> void` :
 Applies the given function to each element in the map.  Has the same weakly linearizable properties as
@@ -139,13 +139,13 @@ In addition to our hash map, the repository includes the following open source h
 - ./tbb_hash            ([tbb concurrent hash map](https://spec.oneapi.io/versions/latest/elements/oneTBB/source/containers/concurrent_unordered_map_cls.html))
 - ./libcuckoo           ([libcuckoo's cuckooohash_map](https://github.com/efficient/libcuckoo))
 - ./folly_hash          ([folly's ConcurrentHashMap](https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h))
-- ./boost_hash          ([boost's concurrent_flat_map](https://www.boost.org/doc/libs/1_83_0/libs/unordered/doc/html/unordered.html#concurrent))
+- ./boost_hash          ([boost's concurrent_flat_map](https://www.boost.org/doc/libs/1_85_0/libs/unordered/doc/html/unordered.html#concurrent))
 - ./parallel_hashmap    ([parallel hashmap](https://github.com/greg7mdp/parallel-hashmap)) **
 - ./seq_hash    ([seq's concurrent hashmap](https://github.com/Thermadiag/seq/blob/main/docs/concurrent_map.md)) **
 - ./folly_sharded       (our own sharded version using folly's efficient [non-concurrent F14map](https://github.com/facebook/folly/blob/main/folly/container/F14Map.h)) **
 - ./std_sharded         (our own sharded version of std::unordered_map) **
 
-<!--- 
+<!---
 - ./growt               ([growt's concurrent hash map](https://github.com/TooBiased/growt))
 --->
 
@@ -245,7 +245,7 @@ Options include:
     -verbose : prints out some extra information
     -t <time in seconds>  : length of each trial, default = 1
     -r <num rounds>  : number of rounds for each size/update-percent/zipfian, default = 2
-    -p <num threads> 
+    -p <num threads>
 
 ## Code Dependencies
 

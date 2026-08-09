@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <new>
 #include <optional>
 #include <thread>
 #include <tuple>
@@ -307,6 +308,19 @@ struct parlay_hash {
   // wrapper to ensure alignment
   struct alignas(64) bucket { bckt v; };
 
+  // malloc only promises alignment for the fundamental types, which on x86-64
+  // is 16 bytes, so it cannot be used for an array of buckets: every bucket
+  // would straddle two cache lines, which is what the alignas is there to
+  // prevent.  The aligned form of operator new does promise it.
+  static bucket* allocate_buckets(size_t n) {
+    return (bucket*) ::operator new(n * sizeof(bucket),
+				    std::align_val_t{alignof(bucket)});
+  }
+
+  static void free_buckets(bucket* b) {
+    ::operator delete(b, std::align_val_t{alignof(bucket)});
+  }
+
   // initialize an uninitialized bucket
   static void initialize(bucket& bck) {
     new (&bck.v) big_atomic<state>(state());
@@ -357,7 +371,7 @@ struct parlay_hash {
 	overflow_size(get_overflow_size(num_bits))
     {
       //if (PrintGrow) std::cout << "initial size: " << size << std::endl;
-      buckets = (bucket*) malloc(sizeof(bucket)*size);
+      buckets = allocate_buckets(size);
       block_status = (std::atomic<status>*) malloc(sizeof(std::atomic<status>) * size/block_size);
       parallel_for(size, [&] (long i) { initialize(buckets[i]);});
       parallel_for(size/block_size, [&] (long i) { block_status[i] = Empty;});
@@ -372,12 +386,12 @@ struct parlay_hash {
 	block_size(get_block_size(num_bits)),
 	overflow_size(get_overflow_size(num_bits))
     {
-      buckets = (bucket*) malloc(sizeof(bucket)*size);
+      buckets = allocate_buckets(size);
       block_status = (std::atomic<status>*) malloc(sizeof(std::atomic<status>) * size/min_block_size);
     }
 
     ~table_version() {
-      free(buckets);
+      free_buckets(buckets);
       free(block_status);
     }
   };

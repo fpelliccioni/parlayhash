@@ -6,8 +6,18 @@
 
 #include "gtest/gtest.h"
 
-constexpr long num_threads = 100;
-constexpr long test_size = 100000;
+// The defaults are what the tests have always run.  They can be lowered from
+// the build so the sanitizer-instrumented runs finish in reasonable time on a
+// machine with few cores -- 100 threads under ThreadSanitizer is not viable.
+#ifndef PARLAY_TEST_NUM_THREADS
+#define PARLAY_TEST_NUM_THREADS 100
+#endif
+#ifndef PARLAY_TEST_SIZE
+#define PARLAY_TEST_SIZE 100000
+#endif
+
+constexpr long num_threads = PARLAY_TEST_NUM_THREADS;
+constexpr long test_size = PARLAY_TEST_SIZE;
 
 template <typename F>
 void parallel_for(long n, F&& f) {

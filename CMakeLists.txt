@@ -42,7 +42,15 @@ target_compile_options(parlay INTERFACE -g)
 find_package(Threads REQUIRED)
 target_link_libraries(parlay INTERFACE Threads::Threads)
 
-add_subdirectory(benchmarks)
+# The benchmarks need jemalloc and abseil, which the library itself does not.
+# Turning them off lets the unit tests be built and run without those.
+option(PARLAYHASH_BENCHMARKS "Build the benchmarks" ON)
+
+if (PARLAYHASH_BENCHMARKS)
+  add_subdirectory(benchmarks)
+else()
+  message(STATUS "benchmarks: Disabled (enable with -DPARLAYHASH_BENCHMARKS=On)")
+endif()
 
 add_subdirectory(examples)
 

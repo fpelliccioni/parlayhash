@@ -1,0 +1,20 @@
+# ThreadSanitizer suppressions.
+#
+# big_atomic is a seqlock: sc() bumps the version to odd, writes val, then
+# stores the version again, and ll()/load() read val speculatively and re-check
+# the version afterwards.  That read and that write are deliberately not atomic
+# -- being able to copy the value without a lock is the whole point -- so
+# ThreadSanitizer reports them as a data race on every update.
+#
+# It could not validate the sequence even if the accesses were annotated:
+# big_atomic orders them with standalone std::atomic_thread_fence, which
+# ThreadSanitizer does not model.  GCC says so directly when building with
+# -fsanitize=thread:
+#
+#   warning: 'atomic_thread_fence' is not supported with '-fsanitize=thread'
+#
+# So the suppression is not hiding a finding to be fixed later; it marks the
+# part of the library that this tool cannot speak about.  Everything above
+# big_atomic -- the epoch collector, the resizing protocol, the bucket logic --
+# is still checked.
+race:parlay::big_atomic

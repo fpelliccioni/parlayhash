@@ -1,0 +1,115 @@
+name: CI
+
+# The library is header-only, so "does it build" is a real test in itself: the
+# only thing that ever compiles these headers is somebody's translation unit.
+# Every job below therefore builds the unit tests from scratch and runs them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Uninstrumented runs, at the workload the tests were written for
+  # (100 threads, 100k elements).
+  tests:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: 'linux / gcc',        os: ubuntu-24.04, cc: gcc,   cxx: g++}
+          - {name: 'linux / clang',      os: ubuntu-24.04, cc: clang, cxx: clang++}
+          - {name: 'macos / appleclang', os: macos-14,     cc: clang, cxx: clang++}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DPARLAYHASH_TEST=On \
+            -DPARLAYHASH_BENCHMARKS=Off
+
+      - name: Build
+        run: cmake --build build -j "$(getconf _NPROCESSORS_ONLN)"
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --no-tests=error
+
+  # There is deliberately no MSVC job here yet.  It is the one that would have
+  # caught issue #13, and dtest.cmake and CMakeLists.txt are already written
+  # with MSVC in mind, but parlay_hash.h calls __builtin_prefetch directly
+  # instead of the PARLAY_PREFETCH macro that portability.h defines for it, so
+  # such a job cannot pass without a change to the library itself.  Kept out of
+  # this workflow so that adding CI does not smuggle in a source change.
+
+  # Sanitizer runs.  The workload is lowered because the runners have a handful
+  # of cores and 100 threads under ThreadSanitizer does not finish.
+  sanitizers:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # UndefinedBehaviorSanitizer is clang-only here: dtest.cmake asks for
+          # -fsanitize=implicit-conversion, which gcc does not have, and it
+          # correctly declines to build the target.
+          - {name: 'asan  / linux / gcc',   os: ubuntu-24.04, cc: gcc,   cxx: g++,     flag: BUILD_ASAN_TESTS}
+          - {name: 'asan  / linux / clang', os: ubuntu-24.04, cc: clang, cxx: clang++, flag: BUILD_ASAN_TESTS}
+          - {name: 'ubsan / linux / clang', os: ubuntu-24.04, cc: clang, cxx: clang++, flag: BUILD_UBSAN_TESTS}
+          - {name: 'tsan  / linux / gcc',   os: ubuntu-24.04, cc: gcc,   cxx: g++,     flag: BUILD_TSAN_TESTS}
+          - {name: 'tsan  / linux / clang', os: ubuntu-24.04, cc: clang, cxx: clang++, flag: BUILD_TSAN_TESTS}
+          - {name: 'asan  / macos',         os: macos-14,     cc: clang, cxx: clang++, flag: BUILD_ASAN_TESTS}
+          - {name: 'tsan  / macos',         os: macos-14,     cc: clang, cxx: clang++, flag: BUILD_TSAN_TESTS}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      # See .tsan-suppress for why big_atomic is suppressed.
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.tsan-suppress
+      UBSAN_OPTIONS: print_stacktrace=1
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPARLAYHASH_TEST=On \
+            -DPARLAYHASH_BENCHMARKS=Off \
+            -DBUILD_ONLY_SANITIZED=On \
+            -D${{ matrix.flag }}=On \
+            -DCMAKE_CXX_FLAGS='-DPARLAY_TEST_NUM_THREADS=8 -DPARLAY_TEST_SIZE=20000'
+
+      - name: Build
+        run: cmake --build build -j "$(getconf _NPROCESSORS_ONLN)"
+
+      # --no-tests=error matters here.  BUILD_ONLY_SANITIZED means the only
+      # tests in this build directory are the instrumented ones, so if the
+      # sanitizer were quietly declined this job would otherwise pass green
+      # having checked nothing.
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --no-tests=error

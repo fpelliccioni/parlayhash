@@ -58,6 +58,10 @@ HWASan are not interchangeable with these modes and are not exercised here.
 
 Scenarios:
 
+- `snapshot_api`: pair payloads, stale-tag rejection, sequential initialization,
+  and unsigned version wrap.
+- `atomic_padded_snapshot`: snapshot checksum plus a boolean in a type with padding.
+- `padded_churn`: direct-entry churn with the padded payload.
 - `atomic_snapshot`: writers/readers on a `big_atomic` payload with a redundant
   checksum, isolating the bucket snapshot mechanism.
 - `direct_churn` / `indirect_churn`: simultaneous insert, remove and find on 64
@@ -132,7 +136,8 @@ regression tests is separate from accepting the library for publication; the
 CI/publication policy in PR #3 requires the checks to pass. Selecting fewer modes
 locally does not weaken that policy.
 
-These are regression witnesses: the suite intentionally remains red until the library is repaired.
+These are regression witnesses: the original revision fails, and findings remain
+failures until their library fixes are applied.
 Passing a finite stress run never proves absence of races, and pool-based memory
 reclamation may hide some logical use-after-free bugs from ASan.
 
@@ -160,3 +165,64 @@ With the upsert-retirement fix, all eight scenarios passed plain execution, ASan
 with leak detection, and UBSan with GCC 15.2.1 / C++23 on the x86-64 configuration
 above. The overflow witness leaked with the inline-only fix and passed after
 retiring both replaced entries and entries constructed by failed attempts.
+
+## Race-free optimistic snapshots
+
+The snapshot implementation keeps the existing writer serialization and version
+validation. Readers perform only atomic loads on shared data; they do not acquire
+a writer lock or increment a shared reader counter. The common integer-map,
+indirect-map and padded-map buckets are checked to remain 64 bytes. There is no
+snapshot allocation on the update path.
+
+Payload storage is encoded explicitly: pair members are separate, bucket state
+contains atomic metadata and entry slots, and tagged indirect pointers use a
+single pointer atomic. Trivially copyable leaf values use native integral atomic
+lanes where object representation and alignment permit; padding-bearing types
+use unsigned-byte atomics. Private representations are converted back to typed
+values only after successful validation. Each publication stores a defined empty
+entry in inactive slots; fixed-size reads therefore never reconstruct stale
+reclaimed pointers from unused slots. Pack expansion and the existing inlining
+hint keep the hot lookup from using metadata-dependent copy loops.
+
+The memory ordering follows the original fence-based protocol, with **atomic**
+payload accesses added:
+
+1. A serialized writer marks the version odd, issues a release fence, performs
+   relaxed atomic payload stores, then publishes an even version with release.
+2. A reader acquires an even version, loads the representation with relaxed
+   atomics, issues an acquire fence, and checks the version again.
+3. If a payload load observes a later writer's store, that store connects the
+   release/acquire fences, so the later writer's odd version happens-before the
+   final version check. The reader cannot accept the older version. The initial
+   acquire also prevents accepting payload older than its committed version.
+
+See the [C++ fence rules](https://eel.is/c++draft/atomics.fences) and
+[atomic coherence rules](https://eel.is/c++draft/intro.races). As with finite
+version-tag protocols, one operation must not span a full counter cycle. The
+counter is unsigned so incrementing across its maximum is defined.
+
+The legacy internal `ll_speculative` entry point now returns a validated value;
+it is not used by map operations. Trivially copyable payloads and pair/bucket
+representations are supported; nontrivial map values still use indirect entries.
+After 64 failed observations, readers yield cooperatively before retrying.
+
+[TSan](https://clang.llvm.org/docs/ThreadSanitizer.html) does not fully model
+`atomic_thread_fence`; passing it does not prove this ordering argument. Shared
+payload accesses are actual atomics, not suppressed or annotated plain accesses.
+The checksum/invariant tests and the memory-order reasoning are both necessary.
+
+After the snapshot fix, all **11 scenarios pass all six modes** (plain, ASan,
+UBSan, TSan, LSan and MSan) with Clang 21.1.8 / C++23 on the x86-64 hardware
+configuration above. MSan uses an instrumented libc++/libc++abi 21.1.8. The added
+checks cover padded values, direct padded-entry churn, pair representation,
+stale tags and defined unsigned-counter wrap.
+
+A short before/after diagnostic used the same GCC 15.2.1 C++23 Release build,
+[jemalloc](https://jemalloc.net/), 100,000 entries, 1/32/128 threads, 0%/50% updates,
+and uniform/Zipf 0.99 keys. Each of 12 cells used four alternating process pairs,
+one measured 0.25-second round plus warmup per process. Across these 96 samples,
+median throughput ratios (new/old) ranged from 1.02 to 1.15. This checks this
+change against the version with alignment/reclamation fixes already applied;
+it is not a general performance claim or a replacement for longer large-set runs.
+The existing inlining hint and fixed-size representation avoid extra intermediate
+state materialization on the hot read path.

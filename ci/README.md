@@ -24,9 +24,10 @@ MSan builds an instrumented [LLVM 21.1.8](https://github.com/llvm/llvm-project/r
 that installation. The runtime build disables its own upstream tests and benchmarks;
 Parlay regression scenarios still run against the instrumented libraries. This
 avoids pulling compiler-development targets into the runtime-only build.
-No sanitizer findings are suppressed or allowed to fail. The current library has
-known race, alignment and replacement-leak findings documented in
-`test/concurrency/README.md`; publication will remain blocked until repaired.
+No sanitizer findings are suppressed or allowed to fail. The regression witnesses
+for snapshot races, allocation alignment and replacement leaks, their historical
+failures and subsequent fixes are documented in `test/concurrency/README.md`.
+Any sanitizer failure blocks publication.
 
 ## Publishing
 

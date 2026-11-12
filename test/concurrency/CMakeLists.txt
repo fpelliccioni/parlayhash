@@ -32,7 +32,7 @@ if(SANITIZER STREQUAL "memory")
   target_link_options(concurrency_stress PRIVATE -stdlib=libc++ -pie
     "-L${MSAN_LIBCXX_ROOT}/lib" "-Wl,-rpath,${MSAN_LIBCXX_ROOT}/lib")
 endif()
-foreach(scenario atomic_snapshot direct_churn indirect_churn direct_growth indirect_growth upsert string_upsert string_overflow_upsert)
+foreach(scenario snapshot_api atomic_snapshot atomic_padded_snapshot padded_churn direct_churn indirect_churn direct_growth indirect_growth upsert string_upsert string_overflow_upsert)
   add_test(NAME ${scenario} COMMAND concurrency_stress ${scenario})
   set_tests_properties(${scenario} PROPERTIES TIMEOUT 120
     ENVIRONMENT "PARLAY_NUM_THREADS=4;ASAN_OPTIONS=detect_leaks=1:halt_on_error=1;TSAN_OPTIONS=halt_on_error=1")

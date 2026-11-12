@@ -99,6 +99,35 @@ struct parlay_hash {
   public:
     size_t list_head;
     Entry buffer[buffer_size];
+    struct parlay_snapshot_storage {
+      using entry_storage = detail::snapshot_storage<Entry>;
+      struct snapshot_type {
+        size_t list_head;
+        std::array<typename entry_storage::snapshot_type, buffer_size> buffer;
+      };
+      std::atomic<size_t> list_head{};
+      entry_storage buffer[buffer_size];
+      void store(const state& value) {
+        list_head.store(value.list_head, std::memory_order_relaxed);
+        for (long i = 0; i < buffer_size; ++i)
+          buffer[i].store(i < value.buffer_cnt() ? value.buffer[i] : Entry{});
+      }
+      template<std::size_t... I>
+      snapshot_type read_slots(std::index_sequence<I...>) const {
+        return {list_head.load(std::memory_order_relaxed), {buffer[I].read()...}};
+      }
+      snapshot_type read() const {
+        return read_slots(std::make_index_sequence<buffer_size>{});
+      }
+      static state decode(const snapshot_type& bits) {
+        return state(bits, std::make_index_sequence<buffer_size>{});
+      }
+    };
+    template<std::size_t... I>
+    state(const typename parlay_snapshot_storage::snapshot_type& bits,
+          std::index_sequence<I...>)
+      : list_head(bits.list_head),
+        buffer{detail::snapshot_storage<Entry>::decode(bits.buffer[I])...} {}
     state() : list_head(0) {}
     state(const Entry& e) : list_head(1ull << 56) {
       buffer[0] = e;
@@ -1089,8 +1118,19 @@ struct parlay_hash {
       Data& get_entry() const { return *get_ptr();}
       static Key make_key(const K& key) {
 	return Key(&key, rehash<Hash>{}(Hash{}(key)));}
+      struct parlay_snapshot_storage {
+        using snapshot_type = Data*;
+        std::atomic<Data*> ptr{};
+        void store(const Entry& value) { ptr.store(value.ptr, std::memory_order_relaxed); }
+        snapshot_type read() const { return ptr.load(std::memory_order_relaxed); }
+        static Entry decode(snapshot_type bits) {
+          Entry value;
+          value.ptr = bits;
+          return value;
+        }
+      };
       Entry(Key k, Data* data) : ptr(tag_ptr(hash(k), data)) {}
-      Entry() {}
+      Entry() : ptr(nullptr) {}
     };
 
     bool clear_at_end;
@@ -1140,8 +1180,18 @@ struct parlay_hash {
       static Key make_key(const K& k) {return k;}
       const K& get_key() const {return DataS::get_key(data);}
       const Data& get_entry() const { return data;}
+      struct parlay_snapshot_storage {
+        using data_storage = detail::snapshot_storage<Data>;
+        using snapshot_type = typename data_storage::snapshot_type;
+        data_storage data;
+        void store(const Entry& value) { data.store(value.data); }
+        snapshot_type read() const { return data.read(); }
+        static Entry decode(const snapshot_type& bits) {
+          return Entry(data_storage::decode(bits));
+        }
+      };
       Entry(const Data& data) : data(data) {}
-      Entry() {}
+      Entry() : data{} {}
     };
 
     DirectEntries(bool clear_at_end=false) {}

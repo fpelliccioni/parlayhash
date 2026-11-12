@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.13)
-project(PARLAYHASH VERSION 1.0 DESCRIPTION "Lock-Free Locks" LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.25)
+project(PARLAYHASH VERSION 1.0.0 DESCRIPTION "Concurrent hash map" LANGUAGES CXX)
+
+include(GNUInstallDirs)
 
 # Set a default build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -34,17 +36,29 @@ set(PARLAYHASH_INCLUDE_DIR "${PARLAYHASH_SOURCE_DIR}/include")
 #set(CMAKE_CXX_COMPILER "/usr/bin/clang++-16")
 
 add_library(parlay INTERFACE)
-target_include_directories(parlay INTERFACE ${PARLAYHASH_INCLUDE_DIR})
-target_compile_features(parlay INTERFACE cxx_std_17)
-target_compile_options(parlay INTERFACE -g)
+add_library(ParlayHash::parlay ALIAS parlay)
+target_include_directories(parlay INTERFACE
+  $<BUILD_INTERFACE:${PARLAYHASH_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_compile_features(parlay INTERFACE cxx_std_23)
 
 # Find threading library
 find_package(Threads REQUIRED)
 target_link_libraries(parlay INTERFACE Threads::Threads)
 
-add_subdirectory(benchmarks)
-
-add_subdirectory(examples)
+option(PARLAYHASH_BENCHMARKS "Build benchmarks (requires benchmark dependencies)" OFF)
+option(PARLAYHASH_EXAMPLES "Build examples" OFF)
+option(PARLAYHASH_CONCURRENCY_TESTS "Build concurrency regression tests" OFF)
+if(PARLAYHASH_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+if(PARLAYHASH_EXAMPLES)
+  add_subdirectory(examples)
+endif()
+if(PARLAYHASH_CONCURRENCY_TESTS)
+  enable_testing()
+  add_subdirectory(test/concurrency)
+endif()
 
 message(STATUS "---------------------------------- Unit Tests ----------------------------------")
 
@@ -62,17 +76,9 @@ if (PARLAYHASH_TEST)
   include(FetchContent)
   FetchContent_Declare(googletest
     GIT_REPOSITORY  https://github.com/google/googletest.git
-    GIT_TAG         main
+    GIT_TAG         v1.17.0
   )
-  FetchContent_GetProperties(googletest)
-  if(NOT googletest_POPULATED)
-    message(STATUS "testing: Configuring GoogleTest")
-    FetchContent_Populate(googletest)  
-    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE BOOL "")
-    add_subdirectory(${googletest_SOURCE_DIR}
-                     ${googletest_BINARY_DIR}
-                     EXCLUDE_FROM_ALL)
-  endif()
+  FetchContent_MakeAvailable(googletest)
 
   # Include test targets
   message(STATUS "testing: Enabled")
@@ -82,3 +88,17 @@ if (PARLAYHASH_TEST)
 else()
   message(STATUS "testing: Disabled (enable with -DPARLAYHASH_TEST=On)")
 endif()
+
+include(CMakePackageConfigHelpers)
+install(TARGETS parlay EXPORT ParlayHashTargets)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/ParlayHash)
+configure_package_config_file(cmake/ParlayHashConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/ParlayHashConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ParlayHash)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/ParlayHashConfigVersion.cmake
+  COMPATIBILITY SameMajorVersion ARCH_INDEPENDENT)
+install(EXPORT ParlayHashTargets NAMESPACE ParlayHash:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ParlayHash)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ParlayHashConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/ParlayHashConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ParlayHash)

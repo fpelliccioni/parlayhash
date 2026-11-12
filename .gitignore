@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Local CMake and Conan output
+/build/
+/test_package/build/
+__pycache__/
+CMakeUserPresets.json

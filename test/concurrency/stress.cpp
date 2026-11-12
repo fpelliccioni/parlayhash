@@ -57,6 +57,39 @@ template<class F> void concurrent(F f) {
     if (failure) std::rethrow_exception(failure);
 }
 
+// Synthetic addresses exercise production packing without dereferencing them.
+// No high-address allocator or five-level paging is required for this control.
+void indirect_pointer_packing() {
+  using Data = parlay::MapData<std::uint64_t, std::string>;
+  using Entry = parlay::IndirectEntries<Data>::Entry;
+  constexpr std::uint64_t addresses[] = {
+    0, 0x1000, 0x0000fffffffffff0ull, 0x0001000000001000ull,
+    0x00aa000000001000ull, 0x00fffffffffffff0ull
+  };
+  static_assert(sizeof(Entry) == sizeof(void*));
+  for (auto address : addresses) {
+    for (std::uint64_t tag = 0; tag < 256; ++tag) {
+      Entry entry{};
+      entry.ptr = Entry::tag_ptr(tag << 56,
+        reinterpret_cast<Data::value_type*>(address));
+      require(reinterpret_cast<std::uintptr_t>(entry.get_ptr()) == address,
+              "indirect pointer lost address bits");
+      require((reinterpret_cast<std::uintptr_t>(entry.ptr) >> 56) == tag,
+              "pointer address contaminated hash tag");
+    }
+  }
+  Data::value_type value{42, "payload"};
+  Entry entry{};
+  entry.ptr = Entry::tag_ptr(0xab00000000000000ull, &value);
+  std::uint64_t same = 42, different = 43;
+  require(entry.equal({&same, 0xab00000000000000ull}), "matching tag/key rejected");
+  require(!entry.equal({&different, 0xab00000000000000ull}), "tag collision matched wrong key");
+  // A mismatching tag must reject without dereferencing this synthetic pointer.
+  entry.ptr = Entry::tag_ptr(0xab00000000000000ull,
+    reinterpret_cast<Data::value_type*>(0x00aa000000001000ull));
+  require(!entry.equal({&same, 0xcd00000000000000ull}), "different hash tag accepted");
+}
+
 void snapshot_api() {
   using Pair = std::pair<std::uint64_t, std::uint64_t>;
   parlay::big_atomic<Pair> value(Pair{1, 2});
@@ -233,7 +266,8 @@ int main(int argc, char** argv) {
     static_assert(sizeof(typename IntegerMap::map::bucket) == 64);
     static_assert(sizeof(typename PaddedMap::map::bucket) == 64);
     static_assert(sizeof(typename parlay::parlay_unordered_map_indirect<std::uint64_t, std::string>::map::bucket) == 64);
-    if (scenario == "snapshot_api") snapshot_api();
+    if (scenario == "indirect_pointer_packing") indirect_pointer_packing();
+    else if (scenario == "snapshot_api") snapshot_api();
     else if (scenario == "atomic_snapshot") atomic_snapshot();
     else if (scenario == "atomic_padded_snapshot") atomic_snapshot<PaddedPayload>();
     else if (scenario == "padded_churn") churn<PaddedMap, PaddedPayload>();

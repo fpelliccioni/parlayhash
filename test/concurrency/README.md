@@ -58,6 +58,11 @@ HWASan are not interchangeable with these modes and are not exercised here.
 
 Scenarios:
 
+- `indirect_pointer_packing`: synthetic low-56-bit addresses and all 256 hash
+  tags round-trip without dereferencing synthetic pointers; real entries check
+  key equality after a tag match, and a mismatching tag rejects a synthetic
+  pointer without dereferencing it. The control fails with the old 48-bit layout.
+
 - `snapshot_api`: pair payloads, stale-tag rejection, sequential initialization,
   and unsigned version wrap.
 - `atomic_padded_snapshot`: snapshot checksum plus a boolean in a type with padding.
@@ -226,3 +231,23 @@ change against the version with alignment/reclamation fixes already applied;
 it is not a general performance claim or a replacement for longer large-set runs.
 The existing inlining hint and fixed-size representation avoid extra intermediate
 state materialization on the hot read path.
+
+## Indirect pointer address range
+
+The remaining indirect-entry truncation reported in
+[upstream issue #14](https://github.com/cmuparlay/parlayhash/issues/14) is addressed
+by reserving the lower 56 pointer bits for the address and the upper eight for a
+hash guard. This matches the address range of the existing overflow-list layout;
+it does not support arbitrary full-width or tagged addresses. No extra storage,
+allocation, or synchronization is added. Bucket indexing continues to use the
+lower 48 hash bits, preserving its growth partition; hash bits 48..55 are unused
+by the indirect guard/index combination.
+
+The guard formerly used 16 bits. For uniformly distributed hash bits, an unrelated
+candidate now passes this preliminary check with probability 1/256 rather than
+1/65536. Full key equality is still checked, so collisions do not become matches,
+but they can cause extra payload accesses. No throughput conclusion is established
+by these correctness tests. Synthetic addresses prove the representation defect
+without requiring a high-address allocation; they do not reproduce the original
+intermittent crash. The test's high-address control follows the example posted by
+[MoFHeka](https://github.com/cmuparlay/parlayhash/issues/14#issuecomment-5290633701).

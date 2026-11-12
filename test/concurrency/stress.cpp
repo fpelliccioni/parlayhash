@@ -146,9 +146,22 @@ void upsert() {
 
 // Heap-owning values force the indirect path and exercise copy/destruction
 // while competing updates retire old versions of the same entry.
-void string_upsert() {
-  parlay::parlay_unordered_map<std::uint64_t, std::string> map(1);
+struct CollidingHash {
+  std::size_t operator()(std::uint64_t) const { return 0; }
+};
+
+template<class Hash = std::hash<std::uint64_t>>
+void string_upsert(bool overflow = false) {
+  using Map = parlay::parlay_unordered_map<std::uint64_t, std::string, Hash>;
+  Map map(1);
   const std::string prefix(128, 'x');
+  if (overflow) {
+    using Impl = typename Map::map;
+    for (unsigned i = 0; i < Impl::buffer_size; ++i) map.Insert(i, prefix + "0");
+    map.Insert(42, prefix + "0");
+    map.Insert(43, prefix + "0");
+    map.Insert(44, prefix + "0");
+  }
   std::atomic<bool> bad{false};
   concurrent([&](unsigned) {
     for (unsigned i = 0; i < 1000; ++i) {
@@ -176,6 +189,10 @@ void string_upsert() {
   require(!bad.load(), "corrupted heap-owning value during upsert/find");
   auto value = map.Find(42);
   require(value && *value == prefix + "8000", "lost string upsert increments");
+  if (overflow) {
+    require(map.Find(43) == prefix + "0" && map.Find(44) == prefix + "0",
+            "upsert retired an unchanged overflow entry");
+  }
 }
 }
 
@@ -192,6 +209,7 @@ int main(int argc, char** argv) {
     else if (scenario == "indirect_growth") growth<Indirect>();
     else if (scenario == "upsert") upsert();
     else if (scenario == "string_upsert") string_upsert();
+    else if (scenario == "string_overflow_upsert") string_upsert<CollidingHash>(true);
     else throw std::runtime_error("unknown scenario");
     std::cout << "PASS " << scenario << '\n';
   } catch (const std::exception& error) {

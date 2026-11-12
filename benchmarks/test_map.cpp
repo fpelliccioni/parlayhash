@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <iomanip>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -313,13 +315,13 @@ test_loop(const std::string& command_name,
               << info << ","
       	      << "grow=" << grow << ","
 	      << "mem_pe=" << (int) bytes_pe << ","
-	      << "insert_mops=" << (int) imops << ",";
+	      << "insert_mops=" << imops << ",";
     if (latency_cutoff > 0) {
       std::cout << "query_latency=" << query_latency_percent << "%@" << latency_cutoff << "usec,"
 		<< "update_latency=" << update_latency_percent << "%@" << latency_cutoff << "usec"
 		<< std::endl;
     } else
-      std::cout << "mops=" << (int) mops << std::endl;
+      std::cout << "mops=" << mops << std::endl;
 
     size_t queries_success = parlay::reduce(query_success_counts);
     size_t updates_success = parlay::reduce(update_success_counts);
@@ -479,7 +481,7 @@ int main(int argc, char* argv[]) {
 	for (auto n : sizes) {
 	  auto [a, b] = generate_integer_distribution<int_type>(n, p, zipfian_param);
 	  std::stringstream str;
-	  str << "long_long,z=" << zipfian_param;
+	  str << "long_long,z=" << std::setprecision(std::numeric_limits<double>::max_digits10) << zipfian_param;
 	  auto [itime, btime, size, q_latency, u_latency] =
 	    test_loop<int_map_type>(command_name, str.str(), a, b, p, rounds, update_percent, upsert,
 				    trial_time, latency_cuttoff, verbose, warmup, grow, expand);
@@ -503,7 +505,7 @@ int main(int argc, char* argv[]) {
       for (auto n : sizes) {
 	auto [a, b] = generate_integer_distribution<small_int_type>(n, p, zipfian_param);
 	std::stringstream str;
-	str << "int,z=" << zipfian_param;
+	str << "int,z=" << std::setprecision(std::numeric_limits<double>::max_digits10) << zipfian_param;
 	auto [itime, btime, size, q_latency, u_latency] =
 	  test_loop<int_set_type>(command_name, str.str(), a, b, p, rounds, update_percent, upsert,
 				  trial_time, latency_cuttoff, verbose, warmup, grow, expand);

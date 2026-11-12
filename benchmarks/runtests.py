@@ -97,7 +97,7 @@ def runtest(test,procs,n,z,mix,ts,arg,params,filename) :
     str_rounds = "-r " + str(num_rounds) + " "
     run_time = time
     if (run_time == 0.0) : run_time = params.time
-    str_time = "-tt " + str(run_time) + " "
+    str_time = "-t " + str(run_time) + " "
     str_n = "-n " + str(n) + " "
     str_arg = arg + " "
     if shuffle : str_other = "-shuffle "

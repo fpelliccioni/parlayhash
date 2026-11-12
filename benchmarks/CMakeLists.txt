@@ -21,7 +21,7 @@ find_package(GTest)
 find_package(absl)
 
 add_benchmark(old_parlay_hash other "" "" "")
-add_benchmark(parlay_hash other "absl::flags;absl::flags_parse" "" "")
+add_benchmark(parlay_hash other "" "" "")
 add_benchmark(std_hash other "" "" "")
 add_benchmark(std_sharded other "" "" "")
 add_benchmark(libcuckoo other "" "" "")
@@ -46,11 +46,11 @@ IF (TBB_FOUND)
   add_benchmark(tbb_hash other TBB::tbb "" "")
 endif()
 
-set(BOOST_DIR ${PARLAYHASH_SOURCE_DIR}/build/benchmarks/boost_1_83_0)
+set(BOOST_DIR "" CACHE PATH "Boost headers root (contains boost/version.hpp)")
 
-# We have to manually specify Boost's location since we are using the latest
-# cutting-edge Boost version, and FindBoost.cmake can not find Boost.Unordered
-if (BOOST_DIR)
+# Supply a prepared header tree here, or use benchmarks/compare for the pinned
+# Boost download and a standalone build of just Parlay and CFM.
+if (BOOST_DIR AND EXISTS "${BOOST_DIR}/boost/unordered/concurrent_flat_map.hpp")
   add_benchmark(boost_hash other "" "" "")
   target_include_directories(boost_hash PRIVATE ${BOOST_DIR})
 endif()

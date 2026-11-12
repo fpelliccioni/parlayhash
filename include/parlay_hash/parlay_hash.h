@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <new>
 #include <optional>
 #include <thread>
 #include <tuple>
@@ -357,7 +358,8 @@ struct parlay_hash {
 	overflow_size(get_overflow_size(num_bits))
     {
       //if (PrintGrow) std::cout << "initial size: " << size << std::endl;
-      buckets = (bucket*) malloc(sizeof(bucket)*size);
+      buckets = static_cast<bucket*>(::operator new(
+        sizeof(bucket) * size, std::align_val_t{alignof(bucket)}));
       block_status = (std::atomic<status>*) malloc(sizeof(std::atomic<status>) * size/block_size);
       parallel_for(size, [&] (long i) { initialize(buckets[i]);});
       parallel_for(size/block_size, [&] (long i) { block_status[i] = Empty;});
@@ -372,12 +374,13 @@ struct parlay_hash {
 	block_size(get_block_size(num_bits)),
 	overflow_size(get_overflow_size(num_bits))
     {
-      buckets = (bucket*) malloc(sizeof(bucket)*size);
+      buckets = static_cast<bucket*>(::operator new(
+        sizeof(bucket) * size, std::align_val_t{alignof(bucket)}));
       block_status = (std::atomic<status>*) malloc(sizeof(std::atomic<status>) * size/min_block_size);
     }
 
     ~table_version() {
-      free(buckets);
+      ::operator delete(buckets, std::align_val_t{alignof(bucket)});
       free(block_status);
     }
   };

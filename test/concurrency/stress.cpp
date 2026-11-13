@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -17,9 +18,14 @@ struct Payload {
   explicit Payload(std::uint64_t k = 0) : key(k), check(k ^ salt) {}
   bool valid(std::uint64_t k) const { return key == k && check == (k ^ salt); }
 };
-struct AtomicEqual {
-  bool operator()(const Payload& a, const Payload& b) const {
-    return a.key == b.key && a.check == b.check;
+// User-defined initialization leaves padding unspecified. Snapshot storage must
+// preserve the fields without treating those padding bytes as integer values.
+struct PaddedPayload {
+  bool odd;
+  std::uint64_t key, check;
+  explicit PaddedPayload(std::uint64_t k = 0) : odd(k & 1), key(k), check(k ^ salt) {}
+  bool valid(std::uint64_t k) const {
+    return odd == bool(k & 1) && key == k && check == (k ^ salt);
   }
 };
 
@@ -51,15 +57,35 @@ template<class F> void concurrent(F f) {
     if (failure) std::rethrow_exception(failure);
 }
 
+void snapshot_api() {
+  using Pair = std::pair<std::uint64_t, std::uint64_t>;
+  parlay::big_atomic<Pair> value(Pair{1, 2});
+  auto [first, tag] = value.ll();
+  require(first == Pair{1, 2} && value.lv(tag), "invalid initial snapshot/tag");
+  require(value.sc(tag, Pair{3, 4}), "uncontended conditional store failed");
+  require(!value.lv(tag) && !value.sc(tag, Pair{5, 6}), "stale tag was accepted");
+  require(value.load() == Pair{3, 4}, "failed store changed payload");
+  auto [speculative, current] = value.ll_speculative();
+  require(speculative == Pair{3, 4} && value.lv(current), "invalid speculative snapshot");
+  value.store_sequential(Pair{5, 6});
+  require(value.load() == Pair{5, 6}, "sequential initialization failed");
+  const auto last = std::numeric_limits<decltype(value)::tag>::max() - 1;
+  value.version.store(last);
+  require(value.sc(last, Pair{7, 8}), "store at version wrap failed");
+  auto [wrapped, zero] = value.ll();
+  require(wrapped == Pair{7, 8} && zero == 0, "version did not wrap safely");
+}
+
 // A small witness for the optimistic snapshot underlying every hash bucket.
+template<class Value = Payload>
 void atomic_snapshot() {
-  parlay::big_atomic<Payload, AtomicEqual> value(Payload{0});
+  parlay::big_atomic<Value> value(Value{0});
   std::atomic<bool> bad{false};
   concurrent([&](unsigned t) {
     for (unsigned i = 0; i < 10000; ++i) {
       if (t < 4) {
         auto [old, tag] = value.ll();
-        value.sc(tag, Payload{old.key + 1});
+        value.sc(tag, Value{old.key + 1});
       } else {
         auto snapshot = value.load();
         if (!snapshot.valid(snapshot.key)) bad.store(true);
@@ -69,7 +95,7 @@ void atomic_snapshot() {
   require(!bad.load(), "torn big_atomic snapshot");
 }
 
-template<class Map> void churn() {
+template<class Map, class Value = Payload> void churn() {
   Map map(1);
   std::atomic<long> balance{0};
   std::atomic<bool> bad{false};
@@ -78,7 +104,7 @@ template<class Map> void churn() {
       auto k = static_cast<std::uint64_t>((i * 17 + t * 13) % 64);
       switch ((i + t) % 3) {
       case 0: {
-        auto previous = map.Insert(k, Payload{k});
+        auto previous = map.Insert(k, Value{k});
         if (!previous) balance.fetch_add(1);
         else if (!previous->valid(k)) bad.store(true);
         break;
@@ -202,7 +228,15 @@ int main(int argc, char** argv) {
     const std::string scenario(argv[1]);
     using Direct = parlay::parlay_unordered_map_direct<std::uint64_t, Payload>;
     using Indirect = parlay::parlay_unordered_map_indirect<std::uint64_t, Payload>;
-    if (scenario == "atomic_snapshot") atomic_snapshot();
+    using PaddedMap = parlay::parlay_unordered_map_direct<std::uint64_t, PaddedPayload>;
+    using IntegerMap = parlay::parlay_unordered_map<std::uint64_t, std::uint64_t>;
+    static_assert(sizeof(typename IntegerMap::map::bucket) == 64);
+    static_assert(sizeof(typename PaddedMap::map::bucket) == 64);
+    static_assert(sizeof(typename parlay::parlay_unordered_map_indirect<std::uint64_t, std::string>::map::bucket) == 64);
+    if (scenario == "snapshot_api") snapshot_api();
+    else if (scenario == "atomic_snapshot") atomic_snapshot();
+    else if (scenario == "atomic_padded_snapshot") atomic_snapshot<PaddedPayload>();
+    else if (scenario == "padded_churn") churn<PaddedMap, PaddedPayload>();
     else if (scenario == "direct_churn") churn<Direct>();
     else if (scenario == "indirect_churn") churn<Indirect>();
     else if (scenario == "direct_growth") growth<Direct>();

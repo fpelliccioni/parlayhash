@@ -11,7 +11,7 @@ class ParlayHashConan(ConanFile):
     url = "https://github.com/fpelliccioni/parlayhash"
     description = "Concurrent hash map with parallel memory reclamation"
     settings = "os", "arch", "compiler", "build_type"
-    exports_sources = "include/*", "LICENSE"
+    exports_sources = "include/parlay_hash/*", "include/parlay/*", "include/utils/*", "LICENSE"
 
     def set_version(self):
         self.version = self.version or "1.0.0"
@@ -20,8 +20,9 @@ class ParlayHashConan(ConanFile):
         check_min_cppstd(self, "23")
 
     def package(self):
-        copy(self, "*", src=os.path.join(self.source_folder, "include"),
-             dst=os.path.join(self.package_folder, "include"))
+        for directory in ("parlay_hash", "parlay", "utils"):
+            copy(self, "*", src=os.path.join(self.source_folder, "include", directory),
+                 dst=os.path.join(self.package_folder, "include", "parlayhash", directory))
         copy(self, "LICENSE", src=self.source_folder,
              dst=os.path.join(self.package_folder, "licenses"))
 
@@ -31,6 +32,7 @@ class ParlayHashConan(ConanFile):
     def package_info(self):
         self.cpp_info.set_property("cmake_file_name", "ParlayHash")
         self.cpp_info.set_property("cmake_target_name", "ParlayHash::parlay")
+        self.cpp_info.includedirs = ["include/parlayhash"]
         self.cpp_info.bindirs = []
         self.cpp_info.libdirs = []
         if self.settings.os in ("Linux", "FreeBSD"):

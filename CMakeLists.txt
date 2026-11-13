@@ -39,7 +39,7 @@ add_library(parlay INTERFACE)
 add_library(ParlayHash::parlay ALIAS parlay)
 target_include_directories(parlay INTERFACE
   $<BUILD_INTERFACE:${PARLAYHASH_INCLUDE_DIR}>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/parlayhash>)
 target_compile_features(parlay INTERFACE cxx_std_23)
 
 # Find threading library
@@ -91,7 +91,10 @@ endif()
 
 include(CMakePackageConfigHelpers)
 install(TARGETS parlay EXPORT ParlayHashTargets)
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# Keep bundled dependencies out of the shared include root. Only the current
+# implementation and its required dependencies belong in the installed package.
+install(DIRECTORY include/parlay_hash include/parlay include/utils
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/parlayhash)
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/ParlayHash)
 configure_package_config_file(cmake/ParlayHashConfig.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/ParlayHashConfig.cmake

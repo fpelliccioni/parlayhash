@@ -72,17 +72,11 @@ jobs:
           conan profile detect --force
           conan create . -pr:h ci/conan-cpp23 -pr:b default
           conan export . --version 1.0.1
-      - name: Verify custom header directory and relocation
-        if: matrix.toolchain == 'gcc-16.2'
+      - name: Verify header ownership and relocated consumers
+        if: matrix.standard == 23
         env:
           CXX: ${{ matrix.compiler }}
-        run: |
-          cmake -S . -B custom-install -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/parlay-custom" -DCMAKE_INSTALL_INCLUDEDIR=include/parlayhash
-          cmake --install custom-install
-          mv "$RUNNER_TEMP/parlay-custom" "$RUNNER_TEMP/parlay-relocated"
-          cmake -S test_package -B consumer-custom -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/parlay-relocated"
-          cmake --build consumer-custom --parallel 2
-          ./consumer-custom/consumer
+        run: python3 ci/test_installation.py
   unit-tests:
     timeout-minutes: 45
     runs-on: ubuntu-24.04

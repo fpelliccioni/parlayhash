@@ -1,0 +1,3 @@
+include(default)
+[settings]
+compiler.cppstd=23

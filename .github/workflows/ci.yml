@@ -1,0 +1,187 @@
+name: CI
+on:
+  push:
+    branches: [main, 'release/**', 'hotfix/**']
+  pull_request:
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  CONAN_VERSION: 2.31.2
+jobs:
+  build:
+    name: build (${{ matrix.toolchain }}, C++${{ matrix.standard }})
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, compiler: g++, standard: 23, toolchain: gcc-16.2, container: "gcc:16.2.0@sha256:b8a42d6804296fbe7a54e17e9d60c3100d9e8dbe7ef88c748cae2ddb00d63ba2"}
+          - {os: ubuntu-24.04, compiler: clang++-18, standard: 23, toolchain: clang-18}
+          - {os: xcode-27, compiler: clang++, standard: 23, toolchain: xcode-27.2}
+          - {os: ubuntu-24.04, compiler: clang++-18, standard: 26, toolchain: clang-18}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare GCC 16.2 container
+        if: matrix.container != ''
+        run: bash ci/setup-gcc-container.sh
+      - name: Select Xcode 27.2
+        if: runner.os == 'macOS'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+        run: |
+          xcode_version=$(xcodebuild -version)
+          [[ "$xcode_version" == 'Xcode 27.2'$'\n'* ]]
+          printf '%s\n' "$xcode_version"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          dirname "$(xcrun --find clang++)" >> "$GITHUB_PATH"
+          xcrun clang++ --version
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        if: matrix.container == ''
+        with:
+          python-version: '3.12'
+      - run: python -m pip install "conan==$CONAN_VERSION" cmake ninja
+      - name: Build, install and test CMake package
+        env:
+          CXX: ${{ matrix.compiler }}
+          STANDARD: ${{ matrix.standard }}
+        run: |
+          cmake -S . -B build -DPARLAYHASH_EXAMPLES=ON -DPARLAYHASH_CONCURRENCY_TESTS=ON -DCMAKE_CXX_STANDARD="$STANDARD" -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/parlay-install"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          cmake --install build
+          cmake -S test_package -B consumer -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/parlay-install" -DCMAKE_CXX_STANDARD="$STANDARD"
+          cmake --build consumer --parallel 2
+          ./consumer/consumer
+      - name: Create and consume Conan package (C++23)
+        if: matrix.standard == 23
+        env:
+          CXX: ${{ matrix.compiler }}
+          CONAN_HOME: ${{ runner.temp }}/conan-validation
+        run: |
+          conan profile detect --force
+          conan create . -pr:h ci/conan-cpp23 -pr:b default
+          conan export . --version 1.0.1
+      - name: Verify custom header directory and relocation
+        if: matrix.toolchain == 'gcc-16.2'
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: |
+          cmake -S . -B custom-install -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/parlay-custom" -DCMAKE_INSTALL_INCLUDEDIR=include/parlayhash
+          cmake --install custom-install
+          mv "$RUNNER_TEMP/parlay-custom" "$RUNNER_TEMP/parlay-relocated"
+          cmake -S test_package -B consumer-custom -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/parlay-relocated"
+          cmake --build consumer-custom --parallel 2
+          ./consumer-custom/consumer
+  unit-tests:
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    container: "gcc:16.2.0@sha256:b8a42d6804296fbe7a54e17e9d60c3100d9e8dbe7ef88c748cae2ddb00d63ba2"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare GCC 16.2 container
+        run: bash ci/setup-gcc-container.sh
+      - name: Publication regression tests
+        run: python3 ci/test_publish.py
+      - name: Sanitizer runner regression tests
+        run: python3 test/concurrency/test_runner.py
+      - name: Existing unit tests
+        run: |
+          cmake -S . -B build -DCMAKE_CXX_COMPILER=g++ -DPARLAYHASH_TEST=ON
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+  benchmark-smoke:
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    container: "gcc:16.2.0@sha256:b8a42d6804296fbe7a54e17e9d60c3100d9e8dbe7ef88c748cae2ddb00d63ba2"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare GCC 16.2 container
+        run: bash ci/setup-gcc-container.sh
+      - name: Runner regression tests
+        run: python3 benchmarks/compare/test_run.py
+      - name: Check comparison harness (no performance threshold)
+        run: |
+          cmake -S benchmarks/compare -B build/compare -DCMAKE_CXX_COMPILER=g++
+          cmake --build build/compare --parallel 2
+          python3 benchmarks/compare/run.py --build-dir build/compare --output results --threads 1 2 --sizes 1000 --updates 0 50 100 --zipfians 0 --rounds 1 --seconds 0.1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: benchmark-smoke
+          path: results/
+  sanitizers:
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined, thread, leak, memory]
+    env:
+      MSAN_LIBCXX_ROOT: ${{ github.workspace }}/.msan-libcxx
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Clang 21
+        run: |
+          wget -q https://apt.llvm.org/llvm-snapshot.gpg.key -O /tmp/llvm.key
+          sudo gpg --dearmor -o /usr/share/keyrings/llvm.gpg /tmp/llvm.key
+          echo 'deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-21 libclang-rt-21-dev ninja-build
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: matrix.sanitizer == 'memory'
+        id: libcxx
+        with:
+          path: .msan-libcxx
+          key: msan-libcxx-21.1.8-ubuntu24-${{ hashFiles('ci/build-msan-libcxx.sh') }}
+      - name: Build instrumented standard library
+        if: matrix.sanitizer == 'memory' && steps.libcxx.outputs.cache-hit != 'true'
+        run: bash ci/build-msan-libcxx.sh
+      - name: Run sanitizer regression tests
+        env:
+          SANITIZER: ${{ matrix.sanitizer }}
+        run: |
+          cmake -S test/concurrency -B build -DCMAKE_CXX_COMPILER=clang++-21 -DSANITIZER="$SANITIZER" -DMSAN_LIBCXX_ROOT="$MSAN_LIBCXX_ROOT"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: sanitizer-${{ matrix.sanitizer }}
+          path: build/Testing/Temporary/
+  publish:
+    needs: [build, unit-tests, benchmark-smoke, sanitizers]
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/hotfix/'))
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    container: "gcc:16.2.0@sha256:b8a42d6804296fbe7a54e17e9d60c3100d9e8dbe7ef88c748cae2ddb00d63ba2"
+    env:
+      CONAN_HOME: ${{ github.workspace }}/.conan-publish
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare GCC 16.2 container
+        run: bash ci/setup-gcc-container.sh
+      - run: python -m pip install "conan==$CONAN_VERSION" cmake
+      - name: Publish and verify exact package revision
+        env:
+          CONAN_LOGIN_USERNAME: ${{ secrets.CONAN_LOGIN_USERNAME }}
+          CONAN_PASSWORD: ${{ secrets.CONAN_PASSWORD }}
+        run: bash ci/publish.sh

@@ -1103,16 +1103,21 @@ struct parlay_hash {
       using K = typename DataS::K;
       using Key = std::pair<const K*,size_t>;
       static constexpr bool Direct = false;
+      // Match the 56-bit address range used by state::list_head. The top
+      // eight bits retain a hash guard; bucket indexing keeps its existing
+      // lower-48-bit hash split, so bits 48..55 of the hash are unused here.
+      static constexpr unsigned pointer_bits = 56;
+      static constexpr size_t pointer_mask = (size_t{1} << pointer_bits) - 1;
       Data* ptr;
       static Data* tag_ptr(size_t hashv, Data* data) {
-	return (Data*) (((hashv >> 48) << 48) | ((size_t) data));
+	return (Data*) ((hashv & ~pointer_mask) | reinterpret_cast<size_t>(data));
       }
       Data* get_ptr() const {
-	return (Data*) (((size_t) ptr) & ((1ull << 48) - 1)); }
+	return (Data*) (reinterpret_cast<size_t>(ptr) & pointer_mask); }
       static unsigned long hash(const Key& k) {
 	return k.second;}
       bool equal(const Key& k) const {
-	return (((k.second >> 48) == (((size_t) ptr) >> 48)) &&
+	return (((k.second >> pointer_bits) == (reinterpret_cast<size_t>(ptr) >> pointer_bits)) &&
 		KeyEqual{}(DataS::get_key(*get_ptr()), *k.first)); }
       Key get_key() const { return make_key(DataS::get_key(*get_ptr()));}
       Data& get_entry() const { return *get_ptr();}

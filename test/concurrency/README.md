@@ -65,6 +65,9 @@ Scenarios:
 - `direct_growth` / `indirect_growth`: writers force repeated growth while readers
   verify permanent keys and churn a hot key to exercise retirement/reuse.
 - `upsert`: eight writers increment one key, requiring exactly 16,000 increments.
+- `string_overflow_upsert`: the same heap-owning updates under a constant hash,
+  with the target behind two other overflow nodes. Verifies unchanged neighboring
+  entries survive failed-attempt cleanup and successful replacement.
 - `string_upsert`: eight writers update a heap-owning string value and read it
   concurrently, requiring exactly 8,000 increments and an intact prefix.
 
@@ -87,7 +90,7 @@ configuration:
 | LSan | 6 passed; `string_upsert` leaked about 1.57 MB |
 | MSan | 7 passed, using instrumented libc++ and libc++abi 21.1.8 |
 
-Current C++23 validation with [GCC 15.2.1](https://gcc.gnu.org/gcc-15/) on Linux
+Earlier seven-scenario C++23 validation (before adding the overflow witness) with [GCC 15.2.1](https://gcc.gnu.org/gcc-15/) on Linux
 x86-64, [AMD Ryzen Threadripper PRO 5995WX](https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen-threadripper-pro/ryzen-threadripper-pro-5000wx-series/amd-ryzen-threadripper-pro-5995wx.html)
 (64 cores / 128 hardware threads):
 
@@ -152,3 +155,8 @@ the prefix and entire numeric suffix without relying on `std::stoul` exceptions.
 A malformed value sets the failure flag and returns a valid fallback string from
 the update callback; the scenario reports corruption after joining all workers.
 Validation deliberately does not throw through an in-progress library update.
+
+With the upsert-retirement fix, all eight scenarios passed plain execution, ASan
+with leak detection, and UBSan with GCC 15.2.1 / C++23 on the x86-64 configuration
+above. The overflow witness leaked with the inline-only fix and passed after
+retiring both replaced entries and entries constructed by failed attempts.

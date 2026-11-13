@@ -751,7 +751,11 @@ struct parlay_hash {
 	  if (s.buffer[i].equal(key)) {
 	    Entry new_e = constr(std::optional(s.buffer[i]));
 	    out_s.buffer[i] = new_e;
-	    if (b->sc(tag, out_s)) return g(s.buffer[i]);
+	    if (b->sc(tag, out_s)) {
+      rtype result = g(s.buffer[i]);
+      entries_->retire_entry(s.buffer[i]);
+      return result;
+    }
 	    else {
 	      entries_->retire_entry(new_e);
 	      cont = true;
@@ -776,9 +780,16 @@ struct parlay_hash {
 	  if (new_head != nullptr) {
 	    if (b->sc(tag, state(s, new_head))) {// try to add to head of list
 	      rtype r = std::optional(g(updated->entry));
+	      entries_->retire_entry(updated->entry);
 	      retire_list_n(old_head, list_len); // retire old list
 	      return r;
-	    } else retire_list_n(new_head, list_len);
+	    } else {
+              // Only the last copied node owns a newly constructed entry.
+              link* replacement = new_head;
+              for (int i = 1; i < list_len; ++i) replacement = replacement->next;
+              entries_->retire_entry(replacement->entry);
+              retire_list_n(new_head, list_len);
+            }
 	  } else {
 	    if (list_len + buffer_size > ht->overflow_size) expand_table(ht);
 	    new_head = new_link(constr(std::optional<Entry>()), old_head);

@@ -65,12 +65,36 @@ CMake requires 3.25 or later. Its exported target is `ParlayHash::parlay`, from
 `find_package(ParlayHash CONFIG REQUIRED)`, also used by Conan CMakeDeps.
 Benchmarks and examples are opt-in (`PARLAYHASH_BENCHMARKS`, `PARLAYHASH_EXAMPLES`)
 so installing the core library does not require Boost, jemalloc or GoogleTest.
-The recipe packages all headers, including vendored Parlay headers, and has no
-Boost dependency. The recipe's `set_version()` retains 1.0.0 as the local default while accepting
+Both packages install only `parlay_hash/`, bundled `parlay/` and `utils/`, under
+`<includedir>/parlayhash/`. The legacy `old_parlay_hash/` tree is excluded.
+`ParlayHash::parlay` and the Conan package add that owned subtree to the compiler
+include path; consumer source still uses `<parlay_hash/unordered_map.h>`.
+Manual builds must use `-I<prefix>/<includedir>/parlayhash`. This avoids overwriting
+another installation's `<includedir>/parlay/` or `<includedir>/utils/` files.
+The Conan recipe has no Boost dependency. The recipe's `set_version()` retains 1.0.0 as the local default while accepting
 the version supplied by the release branch. CI also exports a non-default version
 to exercise that path. Header installation and exported target paths both honor
-`CMAKE_INSTALL_INCLUDEDIR`; a separate consumer checks a custom header directory
-after relocating the installation prefix.
+`CMAKE_INSTALL_INCLUDEDIR`; separate consumers check default and custom header directories after relocating
+the installation prefix. Installation regression tests also preserve pre-existing
+headers owned by another installation, and Conan's consumer checks the package
+contains only the owned header subtree.
+
+### Bundled dependency compatibility
+
+Filesystem isolation does not make two different definitions of `namespace parlay`
+compatible. The current implementation uses bundled
+[ParlayLib](https://github.com/cmuparlay/parlaylib) headers and utility definitions.
+A target using ParlayHash must use that bundled implementation consistently;
+mixing it with a different ParlayLib version in the same translation unit or linked
+program is not a supported configuration. Include-path ordering is not a way to
+select an external version safely. Separate applications can install their
+headers into the same prefix without overwriting one another. A local smoke check against
+[ParlayLib commit 5101769](https://github.com/cmuparlay/parlaylib/commit/51017699dcc421f80479cdb238d3092233ad0d26)
+confirmed shared-prefix file preservation, separate working consumers and one
+mixed-header consumer. That limited check does not establish compatibility across
+versions, include orders, or multiple translation units. External dependency
+selection and namespace/API compatibility need separate validation before they
+can be offered as a package option.
 
 The earlier baseline used C++17 with GCC 15.2.1 on Linux x86-64, running on
 an AMD Ryzen Threadripper PRO 5995WX (64 cores / 128 hardware threads).

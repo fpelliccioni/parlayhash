@@ -14,7 +14,7 @@ class ParlayHashConan(ConanFile):
     exports_sources = "include/parlay_hash/*", "include/parlay/*", "include/utils/*", "LICENSE"
 
     def set_version(self):
-        self.version = self.version or "1.0.0"
+        self.version = self.version or "0.2.0"
 
     def validate(self):
         check_min_cppstd(self, "23")

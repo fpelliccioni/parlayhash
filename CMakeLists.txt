@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(PARLAYHASH VERSION 1.0.0 DESCRIPTION "Concurrent hash map" LANGUAGES CXX)
+project(PARLAYHASH VERSION 0.2.0 DESCRIPTION "Concurrent hash map" LANGUAGES CXX)
 
 include(GNUInstallDirs)
 

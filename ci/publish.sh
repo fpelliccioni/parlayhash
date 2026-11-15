@@ -34,5 +34,17 @@ for credential in ${!CONAN_LOGIN_USERNAME@} ${!CONAN_PASSWORD@}; do
 done
 conan profile detect --force
 conan remote add kth https://packages.kth.cash/api/
-conan install --requires="$reference" -pr:h ci/conan-cpp23 -pr:b default --build=never -r kth -cc core:non_interactive=True
+# The server can acknowledge an upload before its public index has propagated.
+# Retry only the anonymous install, keeping the exact reference and build policy.
+for attempt in {1..12}; do
+  if conan install --requires="$reference" -pr:h ci/conan-cpp23 -pr:b default --build=never -r kth -cc core:non_interactive=True; then
+    break
+  fi
+  if (( attempt == 12 )); then
+    echo "Uploaded package did not become anonymously available after 12 attempts." >&2
+    exit 1
+  fi
+  echo "Anonymous package download failed (attempt $attempt/12); retrying in 5 seconds." >&2
+  sleep 5
+done
 conan test test_package "$reference" -pr:h ci/conan-cpp23 -pr:b default --build=never -cc core:non_interactive=True

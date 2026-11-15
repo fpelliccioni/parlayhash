@@ -40,12 +40,20 @@ with open(os.environ['FIXTURE_LOG'], 'a') as log:
     log.write(json.dumps(record) + '\\n')
 if args[0] == 'list':
     print(json.dumps({'Local Cache': {'parlayhash/1.0.1': {'revisions': {'fixture-revision': {}}}}}))
-if args[0] == 'install' and os.environ.get('FAIL_ANONYMOUS'):
-    sys.exit(17)
+if args[0] == 'install':
+    attempts = sum(json.loads(line)['command'] == 'install' for line in open(os.environ['FIXTURE_LOG']))
+    if os.environ.get('FAIL_ANONYMOUS') or attempts <= int(os.environ.get('FAIL_ANONYMOUS_UNTIL', '0')):
+        sys.exit(17)
+if args[0] == 'test' and os.environ.get('FAIL_CONSUMER'):
+    sys.exit(19)
 '''
         executable = tools / 'conan'
         executable.write_text('#!' + sys.executable + '\n' + program)
         executable.chmod(0o755)
+        # Model propagation delays without making unit tests sleep.
+        sleep = tools / 'sleep'
+        sleep.write_text('#!/bin/sh\nexit 0\n')
+        sleep.chmod(0o755)
 
     def run_publish(self, **overrides):
         return subprocess.run(['bash', str(PUBLISH)], cwd=self.root,
@@ -70,6 +78,25 @@ if args[0] == 'install' and os.environ.get('FAIL_ANONYMOUS'):
         calls = [json.loads(line) for line in self.log.read_text().splitlines()]
         self.assertEqual(calls[-1]['command'], 'install')
         self.assertNotIn('test', [c['command'] for c in calls])
+        self.assertEqual(sum(c['command'] == 'install' for c in calls), 12)
+        self.assertIn('after 12 attempts', result.stderr)
+
+    def test_consumer_failure_is_not_retried(self):
+        result = self.run_publish(FAIL_CONSUMER='1')
+        self.assertEqual(result.returncode, 19)
+        calls = [json.loads(line) for line in self.log.read_text().splitlines()]
+        self.assertEqual(sum(c['command'] == 'install' for c in calls), 1)
+        self.assertEqual(sum(c['command'] == 'test' for c in calls), 1)
+
+    def test_public_index_propagation_retries_stay_anonymous(self):
+        result = self.run_publish(FAIL_ANONYMOUS_UNTIL='2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(line) for line in self.log.read_text().splitlines()]
+        installs = [c for c in calls if c['command'] == 'install']
+        self.assertEqual(len(installs), 3)
+        self.assertTrue(all(not c['credentials_present'] for c in installs))
+        self.assertEqual(sum(c['command'] == 'test' for c in calls), 1)
+        self.assertEqual(sum(c['command'] == 'upload' for c in calls), 1)
 
     def test_other_events_are_rejected_before_using_credentials(self):
         for event, ref in [('push', 'refs/heads/main'),

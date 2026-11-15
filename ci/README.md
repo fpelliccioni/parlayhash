@@ -43,7 +43,11 @@ revision and the header package into a new anonymous cache and runs the consumer
 with `--build=never`. Both global and remote-specific credential environment
 variables are removed before verification; network checks use
 `core:non_interactive=True` so authentication cannot silently rescue a public
-package download. Publication regression tests verify that boundary and reject
+package download. The anonymous install retries up to 12 times, waiting five
+seconds between failures, to allow the public server index to propagate. Every
+attempt keeps the exact revision, anonymous environment and `--build=never`;
+exhausting the attempts fails publication. Consumer execution is not retried.
+Publication regression tests verify that boundary, bounded retries and reject
 non-release events without contacting the server. A failed post-upload check fails the job; it does not remove
 an uploaded revision.
 

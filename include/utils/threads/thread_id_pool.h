@@ -106,9 +106,12 @@ class ThreadIdPool : public std::enable_shared_from_this<ThreadIdPool> {
       static std::mutex m_;
       std::lock_guard<std::mutex> g_{m_};
 
-      ThreadId* current = available_ids.load(std::memory_order_relaxed);
+      // The node is read through this pointer (current->next, and its id by
+      // the caller), so every load of it, the failed exchange's too, has to
+      // synchronize with the release in relinquish() that published the node.
+      ThreadId* current = available_ids.load(std::memory_order_acquire);
       while (current && !available_ids.compare_exchange_weak(current, current->next,
-               std::memory_order_acquire, std::memory_order_relaxed)) {}
+               std::memory_order_acquire, std::memory_order_acquire)) {}
       if (current) { return current; }
     }
     return new ThreadId(num_thread_ids.fetch_add(1));

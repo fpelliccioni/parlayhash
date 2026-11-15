@@ -77,6 +77,9 @@ Scenarios:
 - `string_overflow_upsert`: the same heap-owning updates under a constant hash,
   with the target behind two other overflow nodes. Verifies unchanged neighboring
   entries survive failed-attempt cleanup and successful replacement.
+- `thread_id_reuse`: eight threads keep starting short-lived threads, 3,200 in
+  all, so thread ids are relinquished and taken at the same time. Each id has
+  one live owner, and ids are reused.
 - `string_upsert`: eight writers update a heap-owning string value and read it
   concurrently, requiring exactly 8,000 increments and an intact prefix.
 

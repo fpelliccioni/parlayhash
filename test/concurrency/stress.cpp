@@ -253,6 +253,34 @@ void string_upsert(bool overflow = false) {
             "upsert retired an unchanged overflow entry");
   }
 }
+// Thread ids are handed back by threads that end while new threads take them.
+// Each id must belong to one live thread at a time, and taking a recycled id
+// reads the node the ending thread just wrote.
+void thread_id_reuse() {
+  constexpr unsigned spawners = 8, rounds = 400, limit = 4096;
+  std::vector<std::atomic<unsigned>> owners(limit);
+  std::atomic<bool> failed{false};
+  std::atomic<unsigned> lifetimes{0};
+  std::vector<std::thread> threads;
+  for (unsigned s = 0; s < spawners; ++s) threads.emplace_back([&] {
+    for (unsigned r = 0; r < rounds; ++r) {
+      std::thread worker([&] {
+        const auto id = parlay::internal::get_thread_id();
+        if (id >= limit || owners[id].fetch_add(1) != 0) { failed = true; return; }
+        std::this_thread::yield();
+        if (owners[id].fetch_sub(1) != 1) failed = true;
+        lifetimes.fetch_add(1);
+      });
+      worker.join();
+    }
+  });
+  for (auto& thread : threads) thread.join();
+  require(!failed, "a thread id was owned by two live threads");
+  require(lifetimes == spawners * rounds, "thread lifetime count");
+  // Far fewer ids than lifetimes: they were recycled, which is the path under test.
+  require(parlay::internal::get_num_thread_ids() < spawners * rounds / 4, "thread ids were not reused");
+}
+
 }
 
 int main(int argc, char** argv) {
@@ -277,6 +305,7 @@ int main(int argc, char** argv) {
     else if (scenario == "indirect_growth") growth<Indirect>();
     else if (scenario == "upsert") upsert();
     else if (scenario == "string_upsert") string_upsert();
+    else if (scenario == "thread_id_reuse") thread_id_reuse();
     else if (scenario == "string_overflow_upsert") string_upsert<CollidingHash>(true);
     else throw std::runtime_error("unknown scenario");
     std::cout << "PASS " << scenario << '\n';

@@ -1,3 +1,4 @@
+#include <atomic>
 #include <iostream>
 #include <string>
 #include <unordered_set>
@@ -215,3 +216,56 @@ TEST(TestHash,TestMapUpsertWhileGrowing) {
   for (long k = 0; k < num_keys; k++)
     ASSERT_EQ(map.Find(k), std::optional<long>(rounds));
 }
+
+// Direct entries compare every slot of a bucket, including the empty ones,
+// which hold a default entry: the default key must not be found in them.
+TEST(TestHash,TestMapDirectDefaultKey) {
+  constexpr unsigned long n = 10000;
+  parlay::parlay_unordered_map<unsigned long, unsigned long> map;
+  ASSERT_FALSE(map.Find(0));
+  ASSERT_FALSE(map.Remove(0));
+  for (unsigned long i = 1; i <= n; i++) map.Insert(i, i + 1);
+  ASSERT_EQ(map.size(), n);
+  ASSERT_FALSE(map.Find(0));
+  ASSERT_FALSE(map.Remove(0));
+  ASSERT_EQ(map.size(), n);
+  map.Insert(0, 7);
+  ASSERT_EQ(*map.Find(0), 7);
+  for (unsigned long i = 1; i <= n; i++) ASSERT_EQ(*map.Find(i), i + 1);
+  for (unsigned long i = n + 1; i <= 2 * n; i++) ASSERT_FALSE(map.Find(i));
+  ASSERT_EQ(*map.Remove(0), 7);
+  ASSERT_FALSE(map.Find(0));
+  for (unsigned long i = 1; i <= n; i += 2) ASSERT_EQ(*map.Remove(i), i + 1);
+  for (unsigned long i = 1; i <= n; i++) ASSERT_EQ(map.Find(i).has_value(), i % 2 == 0);
+  ASSERT_EQ(map.size(), n / 2);
+}
+
+namespace {
+// An equality that notes being handed the default key, which the tests using
+// it never insert and never look up.
+std::atomic<bool> compared_default_key{false};
+struct NotingEqual {
+  bool operator()(unsigned long a, unsigned long b) const {
+    if (a == 0 || b == 0) compared_default_key.store(true);
+    return a == b;
+  }
+};
+}  // namespace
+
+// A user's KeyEqual only sees keys the user supplied: the unused slots of a
+// bucket are not compared through it.
+TEST(TestHash,TestMapDirectKeyEqualOnlySeesSuppliedKeys) {
+  constexpr unsigned long n = 10000;
+  parlay::parlay_unordered_map<unsigned long, unsigned long,
+                               std::hash<unsigned long>, NotingEqual> map;
+  compared_default_key.store(false);
+  ASSERT_FALSE(map.Find(1));
+  ASSERT_FALSE(map.Remove(1));
+  for (unsigned long i = 1; i <= n; i++) map.Insert(i, i + 1);
+  for (unsigned long i = 1; i <= n; i++) ASSERT_EQ(*map.Find(i), i + 1);
+  for (unsigned long i = n + 1; i <= 2 * n; i++) ASSERT_FALSE(map.Find(i));
+  for (unsigned long i = 1; i <= n; i += 2) ASSERT_EQ(*map.Remove(i), i + 1);
+  for (unsigned long i = 1; i <= n; i++) ASSERT_EQ(map.Find(i).has_value(), i % 2 == 0);
+  ASSERT_FALSE(compared_default_key.load());
+}
+

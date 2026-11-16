@@ -289,13 +289,37 @@ struct parlay_hash {
     return len;
   }
 
+  // Whether the unused slots of a bucket may be compared with a key.  They
+  // hold a default entry, and only a comparison known to accept any value
+  // of the key type may be handed one: the built-in equality of a scalar.
+  // A user's KeyEqual is free to assume every key it sees was supplied by
+  // the user, for example to dereference a pointer key.
+  static constexpr bool compares_unused_slots =
+    Entry::Direct && std::is_scalar_v<K> &&
+    (std::is_same_v<typename Entries::KeyEqual, std::equal_to<K>> ||
+     std::is_same_v<typename Entries::KeyEqual, std::equal_to<>>);
+
   // Find key if it is in the buffer. Return index.
-  int find_in_buffer(const state& s, const K& k) {
-    long len = s.buffer_cnt();
-    for (long i = 0; i < std::min(len, buffer_size); i++)
-      if (s.buffer[i].equal(k))
-	return i;
-    return -1;
+  // The position of a key within its bucket is effectively random, so a
+  // loop that leaves at the match costs a branch misprediction on most
+  // lookups.  Where the unused slots may be compared (see above), every
+  // slot is compared and the match selected without a data-dependent
+  // branch.  Otherwise the scan stops at the count: indirect entries are
+  // compared through a pointer that is only valid within it, and other
+  // comparisons are not to be given a key the user never supplied.
+  static int find_in_buffer(const state& s, const K& k) {
+    long len = std::min(s.buffer_cnt(), buffer_size);
+    if constexpr (compares_unused_slots) {
+      int found = -1;
+      for (long i = 0; i < buffer_size; i++)
+	found = ((i < len) & s.buffer[i].equal(k)) ? int(i) : found;
+      return found;
+    } else {
+      for (long i = 0; i < len; i++)
+	if (s.buffer[i].equal(k))
+	  return i;
+      return -1;
+    }
   }
 
   // Apply f to all entries in the state.
@@ -682,9 +706,8 @@ struct parlay_hash {
       auto [s, tag] = b->ll();
       if (s.is_forwarded()) 
 	check_bucket_and_state(ht, k, b, s, tag, idx);
-      for (long i = 0; i < std::min(s.buffer_cnt(), buffer_size); i++)
-	if (s.buffer[i].equal(k))
-	  return std::optional(f(s.buffer[i]));
+      int i = find_in_buffer(s, k);
+      if (i >= 0) return std::optional(f(s.buffer[i]));
       // if not found and not overfull, then done
       if (s.buffer_cnt() <= buffer_size) return std::nullopt;
       // otherwise need to search overflow, which requires protection

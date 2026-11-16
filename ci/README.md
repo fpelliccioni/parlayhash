@@ -75,7 +75,7 @@ Both packages install only `parlay_hash/`, bundled `parlay/` and `utils/`, under
 include path; consumer source still uses `<parlay_hash/unordered_map.h>`.
 Manual builds must use `-I<prefix>/<includedir>/parlayhash`. This avoids overwriting
 another installation's `<includedir>/parlay/` or `<includedir>/utils/` files.
-The Conan recipe has no Boost dependency. The recipe's `set_version()` retains 0.2.0 as the local default while accepting
+The Conan recipe has no Boost dependency. The recipe's `set_version()` retains 0.3.0 as the local default while accepting
 the version supplied by the release branch. CI also exports a non-default version
 to exercise that path. Header installation and exported target paths both honor
 `CMAKE_INSTALL_INCLUDEDIR`; separate consumers check default and custom header directories after relocating

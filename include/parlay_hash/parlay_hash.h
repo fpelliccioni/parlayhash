@@ -480,7 +480,7 @@ struct parlay_hash {
       state hold[grow_factor];
       size_t mask = grow_factor-1;
       for_each_in_state(s, [&] (const Entry& entry) {
-	size_t idx = next->get_index(entry.get_key()) & mask;
+	size_t idx = next->get_index(entries_->make_key(entry.get_key())) & mask;
        	hold[idx] = state(hold[idx], entry,
 			  [&] (const Entry& e, link* l) {return new_link(e,l);});
       });
@@ -965,6 +965,20 @@ struct parlay_hash {
     }
   }
 
+  // Read-only weak traversal. A single epoch protects entries and overflow
+  // links while recursive forwarding follows disjoint bucket partitions.
+  // Borrowed references must not escape the callback. No iterator escapes.
+  template <typename F>
+  void ForEach(const F& f) {
+    epoch::with_epoch([&] {
+      table_version* ht = current_table_version.load();
+      for (long i = 0; i < ht->size; ++i)
+        for_each_bucket_rec(ht, i, [&](const Entry& entry) {
+          f(std::as_const(entry.get_entry()));
+        });
+    });
+  }
+
   // Apply function f to all entries of the table.  Works while updates are going on, and guarantees that:
   //   any element whose delete linearizes before the invocation will not be included
   //   any element whose insert linearizes after the response will not be included
@@ -1109,6 +1123,14 @@ struct parlay_hash {
   struct rehash<Hash, typename Hash::is_avalanching> {
     size_t operator()(size_t i) {return i;}};
 
+  // Ephemeral operation context: no policy pointers are stored in buckets.
+  template <class K, class Equal>
+  struct policy_key {
+    const K* first;
+    size_t second;
+    const Equal* equal;
+  };
+
   // Definition where entries of the hash table are stored indirectly
   // through a pointer.  This means the entries themselves will never
   // move, but requires a level of indirection when accessing them.
@@ -1121,10 +1143,13 @@ struct parlay_hash {
     using Data = typename DataS::value_type;
     using Hash = typename DataS::Hash;
     using KeyEqual = typename DataS::KeyEqual;
+    static constexpr bool stateful = !std::is_empty_v<Hash> || !std::is_empty_v<KeyEqual>;
+    [[no_unique_address]] Hash hash_;
+    [[no_unique_address]] KeyEqual equal_;
       
     struct Entry {
       using K = typename DataS::K;
-      using Key = std::pair<const K*,size_t>;
+      using Key = std::conditional_t<stateful, policy_key<K, KeyEqual>, std::pair<const K*,size_t>>;
       static constexpr bool Direct = false;
       // Match the 56-bit address range used by state::list_head. The top
       // eight bits retain a hash guard; bucket indexing keeps its existing
@@ -1140,11 +1165,13 @@ struct parlay_hash {
       static unsigned long hash(const Key& k) {
 	return k.second;}
       bool equal(const Key& k) const {
-	return (((k.second >> pointer_bits) == (reinterpret_cast<size_t>(ptr) >> pointer_bits)) &&
-		KeyEqual{}(DataS::get_key(*get_ptr()), *k.first)); }
-      Key get_key() const { return make_key(DataS::get_key(*get_ptr()));}
+        if ((k.second >> pointer_bits) != (reinterpret_cast<size_t>(ptr) >> pointer_bits)) return false;
+        if constexpr (stateful) return (*k.equal)(DataS::get_key(*get_ptr()), *k.first);
+        else return KeyEqual{}(DataS::get_key(*get_ptr()), *k.first);
+      }
+      const K& get_key() const { return DataS::get_key(*get_ptr()); }
       Data& get_entry() const { return *get_ptr();}
-      static Key make_key(const K& key) {
+      static Key make_key(const K& key) requires (!stateful) {
 	return Key(&key, rehash<Hash>{}(Hash{}(key)));}
       struct parlay_snapshot_storage {
         using snapshot_type = Data*;
@@ -1167,13 +1194,18 @@ struct parlay_hash {
     // a memory pool for the entries
     epoch::memory_pool<Data>* data_pool;
 
-    IndirectEntries(bool clear_at_end=false) 
-      : clear_at_end(clear_at_end),
+    IndirectEntries(bool clear_at_end=false, const Hash& hash=Hash{}, const KeyEqual& equal=KeyEqual{})
+      : hash_(hash), equal_(equal), clear_at_end(clear_at_end),
 	data_pool(clear_at_end ?
 		  new epoch::memory_pool<Data>() :
 		  &epoch::get_default_pool<Data>()) {}
     ~IndirectEntries() {
       if (clear_at_end) { delete data_pool;}
+    }
+
+    Key make_key(const typename DataS::K& key) const {
+      if constexpr (stateful) return Key{&key, rehash<Hash>{}(hash_(key)), &equal_};
+      else return Entry::make_key(key);
     }
 
     // allocates memory for the entry
@@ -1195,17 +1227,25 @@ struct parlay_hash {
     using Data = typename DataS::value_type;
     using Hash = typename DataS::Hash;
     using KeyEqual = typename DataS::KeyEqual;
+    static constexpr bool stateful = !std::is_empty_v<Hash> || !std::is_empty_v<KeyEqual>;
+    [[no_unique_address]] Hash hash_;
+    [[no_unique_address]] KeyEqual equal_;
     using K = typename DataS::K;
 
     struct Entry {
       using K = typename DataS::K;
-      using Key = K;
+      using Key = std::conditional_t<stateful, policy_key<K, KeyEqual>, K>;
       static const bool Direct = true;
       Data data; 
       static unsigned long hash(const Key& k) {
-	return rehash<Hash>{}(Hash{}(k));}
-      bool equal(const Key& k) const { return KeyEqual{}(get_key(), k); }
-      static Key make_key(const K& k) {return k;}
+        if constexpr (stateful) return k.second;
+        else return rehash<Hash>{}(Hash{}(k));
+      }
+      bool equal(const Key& k) const {
+        if constexpr (stateful) return (*k.equal)(get_key(), *k.first);
+        else return KeyEqual{}(get_key(), k);
+      }
+      static Key make_key(const K& k) requires (!stateful) {return k;}
       const K& get_key() const {return DataS::get_key(data);}
       const Data& get_entry() const { return data;}
       struct parlay_snapshot_storage {
@@ -1222,8 +1262,14 @@ struct parlay_hash {
       Entry() : data{} {}
     };
 
-    DirectEntries(bool clear_at_end=false) {}
-    Entry make_entry(const K& k, const Data& data) {
+    DirectEntries(bool clear_at_end=false, const Hash& hash=Hash{}, const KeyEqual& equal=KeyEqual{})
+      : hash_(hash), equal_(equal) {}
+    using Key = typename Entry::Key;
+    Key make_key(const K& key) const {
+      if constexpr (stateful) return Key{&key, rehash<Hash>{}(hash_(key)), &equal_};
+      else return Entry::make_key(key);
+    }
+    Entry make_entry(const Key& k, const Data& data) {
       return Entry(data); }
 
     // retiring is a noop since no memory has been allocated for entries

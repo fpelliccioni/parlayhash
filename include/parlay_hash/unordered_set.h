@@ -32,6 +32,8 @@ namespace parlay {
     using key_type = K;
     using value_type = K;
     using iterator = typename set::Iterator;
+    using hasher = typename Entries::Hash;
+    using key_equal = typename Entries::KeyEqual;
 
     static constexpr auto true_f = [] (const Entry& kv) {return true;};
     static constexpr auto identity = [] (const Entry& kv) {return kv;};
@@ -40,11 +42,16 @@ namespace parlay {
       : entries_(Entries(clear_at_end)),
 	m(set(n+1, &entries_, clear_at_end)) {}
 
+    unordered_set_internal(long n, const hasher& hash, const key_equal& equal=key_equal{},
+                               bool clear_at_end=default_clear_at_end)
+      : entries_(clear_at_end, hash, equal), m(n+1, &entries_, clear_at_end) {}
+
     iterator begin() { return m.begin();}
     iterator end() { return m.end();}
     bool empty() { return size() == 0;}
     bool max_size() { return (1ull << 47)/sizeof(Entry);}
     void clear() { m.clear_buckets();}
+    template <typename F> void ForEach(const F& f) { m.ForEach(f); }
     long size() { return m.size();}
 
     template <typename F = decltype(identity)>
@@ -52,23 +59,23 @@ namespace parlay {
     long count(const K& k) { return (contains(k)) ? 1 : 0; }
     bool contains(const K& k) { return Find(k);}
 
-    bool Find(const K& k) { return m.Find(Entry::make_key(k), true_f).has_value(); }
+    bool Find(const K& k) { return m.Find(entries_.make_key(k), true_f).has_value(); }
     bool Insert(const K& key) 
     {
-      auto k = Entry::make_key(key);
+      auto k = entries_.make_key(key);
       return !m.Insert(k, [&] {return entries_.make_entry(k, key);}, true_f).has_value();
     }
 
     bool Remove(const K& k)
-    { return m.Remove(Entry::make_key(k), true_f).has_value(); }
+    { return m.Remove(entries_.make_key(k), true_f).has_value(); }
 
-    iterator find(const K& k) { return m.find(k); }
+    iterator find(const K& k) { return m.find(entries_.make_key(k)); }
 
     std::pair<iterator,bool> insert(const value_type& entry) {
       return m.insert(entries_.make_entry(make_key(entry.first), entry)); }
 
     iterator erase(iterator pos) { return m.erase(pos); }
-    size_t erase(const K& k) { return m.erase(k); }
+    size_t erase(const K& k) { return m.erase(entries_.make_key(k)); }
 
   };
 

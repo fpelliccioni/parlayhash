@@ -581,15 +581,17 @@ private:
 
   template <typename Thunk>
   auto with_epoch(Thunk f) {
-    int id = internal::get_epoch().announce();
-    if constexpr (std::is_void_v<std::invoke_result_t<Thunk>>) {
-      f();
-      internal::get_epoch().unannounce(id);
-    } else {
-      auto v = f();
-      internal::get_epoch().unannounce(id);
-      return v;
-    }
+    auto& current = internal::get_epoch();
+    // Nested reads borrow the existing announcement. Only its owner clears
+    // it; RAII also protects callers whose function throws.
+    struct scope {
+      internal::epoch_s& current;
+      bool owner;
+      int id;
+      ~scope() { if (owner) current.unannounce(id); }
+    } guard{current, current.get_my_epoch() == -1, 0};
+    if (guard.owner) guard.id = current.announce();
+    return f();
   }
 
 } // end namespace epoch
